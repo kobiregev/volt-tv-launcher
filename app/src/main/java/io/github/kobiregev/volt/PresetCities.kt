@@ -1,0 +1,58 @@
+package io.github.kobiregev.volt
+
+class PresetCity(val name: String, val country: String, val lat: Double, val lon: Double)
+
+/** Large world cities for choosing a weather location without a keyboard. Sorted by name. */
+object PresetCities {
+    val ALL: List<PresetCity> = listOf(
+        PresetCity("Amsterdam", "Netherlands", 52.37, 4.90),
+        PresetCity("Athens", "Greece", 37.98, 23.73),
+        PresetCity("Auckland", "New Zealand", -36.85, 174.76),
+        PresetCity("Bangkok", "Thailand", 13.75, 100.50),
+        PresetCity("Barcelona", "Spain", 41.39, 2.17),
+        PresetCity("Beijing", "China", 39.91, 116.40),
+        PresetCity("Berlin", "Germany", 52.52, 13.41),
+        PresetCity("Buenos Aires", "Argentina", -34.61, -58.38),
+        PresetCity("Cairo", "Egypt", 30.04, 31.24),
+        PresetCity("Cape Town", "South Africa", -33.92, 18.42),
+        PresetCity("Chicago", "United States", 41.88, -87.63),
+        PresetCity("Dubai", "United Arab Emirates", 25.20, 55.27),
+        PresetCity("Dublin", "Ireland", 53.35, -6.26),
+        PresetCity("Hong Kong", "Hong Kong", 22.32, 114.17),
+        PresetCity("Istanbul", "Turkey", 41.01, 28.98),
+        PresetCity("Jakarta", "Indonesia", -6.21, 106.85),
+        PresetCity("Jerusalem", "Israel", 31.77, 35.22),
+        PresetCity("Johannesburg", "South Africa", -26.20, 28.05),
+        PresetCity("Lagos", "Nigeria", 6.52, 3.38),
+        PresetCity("Lima", "Peru", -12.05, -77.04),
+        PresetCity("Lisbon", "Portugal", 38.72, -9.14),
+        PresetCity("London", "United Kingdom", 51.51, -0.13),
+        PresetCity("Los Angeles", "United States", 34.05, -118.24),
+        PresetCity("Madrid", "Spain", 40.42, -3.70),
+        PresetCity("Melbourne", "Australia", -37.81, 144.96),
+        PresetCity("Mexico City", "Mexico", 19.43, -99.13),
+        PresetCity("Miami", "United States", 25.76, -80.19),
+        PresetCity("Moscow", "Russia", 55.76, 37.62),
+        PresetCity("Mumbai", "India", 19.08, 72.88),
+        PresetCity("Nairobi", "Kenya", -1.29, 36.82),
+        PresetCity("New Delhi", "India", 28.61, 77.21),
+        PresetCity("New York", "United States", 40.71, -74.01),
+        PresetCity("Paris", "France", 48.86, 2.35),
+        PresetCity("Rio de Janeiro", "Brazil", -22.91, -43.17),
+        PresetCity("Riyadh", "Saudi Arabia", 24.71, 46.68),
+        PresetCity("Rome", "Italy", 41.90, 12.50),
+        PresetCity("San Francisco", "United States", 37.77, -122.42),
+        PresetCity("Santiago", "Chile", -33.45, -70.67),
+        PresetCity("Sao Paulo", "Brazil", -23.55, -46.63),
+        PresetCity("Seoul", "South Korea", 37.57, 126.98),
+        PresetCity("Shanghai", "China", 31.23, 121.47),
+        PresetCity("Singapore", "Singapore", 1.35, 103.82),
+        PresetCity("Stockholm", "Sweden", 59.33, 18.07),
+        PresetCity("Sydney", "Australia", -33.87, 151.21),
+        PresetCity("Tel Aviv", "Israel", 32.09, 34.78),
+        PresetCity("Tokyo", "Japan", 35.68, 139.69),
+        PresetCity("Toronto", "Canada", 43.65, -79.38),
+        PresetCity("Vienna", "Austria", 48.21, 16.37),
+        PresetCity("Warsaw", "Poland", 52.23, 21.01)
+    ).sortedBy { it.name }
+}

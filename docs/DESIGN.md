@@ -188,8 +188,8 @@ settings" row at the end of the app options sheet.
   settings" row (chevron, opens the system settings). Right card: `C_CARD`,
   14dp gap, 22dp sides and 20dp top and bottom padding, a 22sp medium title and
   the rows of the selected section in a scroll view (no scrollbar).
-- **Sections:** Categories, Home cards, About Volt. The list is a plain
-  `sections` list in code, so a "Weather" section can be added first later.
+- **Sections:** Weather (first, selected at start), Categories, Home cards, About
+  Volt. The list is a plain `sections` list in code.
 - **Rows:** the same row look as the sheet (`Rows.kt` builds both): 44dp, 9dp
   radius, 18dp icon, 16sp label, 15sp value. Focused: `C_BLUE` fill, white text
   and icon. A selected section that does not have focus shows `C_SEL`.
@@ -220,6 +220,35 @@ settings" row at the end of the app options sheet.
 - **Toggle:** a 38x22dp pill track, `C_BLUE` when on and `C_TRACK` when off, with
   an 18dp white knob. On a focused (blue) row the track is darker blue when on
   and dark translucent when off, so it stays visible. OK switches it.
+- **Weather section:** rows "City" (value: the city name or "Not set", chevron),
+  "Temperature" (value °C or °F, OK toggles), "Update every" (15 min, 30 min or
+  1 hour, OK cycles) and a plain note row (13sp `C_SEC`, no background): "Weather
+  data from Open-Meteo. No account needed." The Weather card switch in Home
+  cards stays the one on/off switch. The saved values live in the store; the
+  `weather.*` keys of `local.properties` are only the default until a city is
+  saved. Home reads the location, unit and interval in `onResume`; a changed
+  city or unit refreshes the weather at once.
+- **City page:** OK on the City row replaces the right panel (title "City"). First
+  row: a search field (blue 2dp stroke, hint "Search a city", Done key). Typing
+  searches 600 ms after the last change (2 characters or more); Done or Enter
+  searches at once. A plain row shows "Searching…", "Can't reach Open-Meteo. Try
+  again or pick from the list." or "No matches". Up to 5 result rows (map pin
+  icon, name, value "admin1, country"); OK saves the city and returns to the
+  Weather section with focus on the City row. Then a divider and the row
+  "Pick from a list" (list icon, "No keyboard needed", chevron). Late search
+  results are ignored. Network work runs on the background executor.
+- **Search field keys:** the activity handles D-pad keys of the field itself.
+  Down hides the keyboard and goes to the first result (or "Pick from a list").
+  Up stays. Left at the start of the text goes to the section column; elsewhere
+  it moves the cursor. Back closes the page at once, even with the keyboard open.
+- **Preset page:** title "Pick a city". One row per large city (name, country), sorted by
+  name, in a scroll list. OK saves and returns to the Weather section.
+- **Pages:** Left from a City or Preset page returns to the section column and
+  shows the Weather section again. Back returns to the Weather section (it does not
+  close the screen).
+- **No location:** the Weather card shows "Set a city in Volt settings" in
+  `C_SEC` instead of the temperature and the icon. No network calls run and the
+  status bar temperature is hidden.
 - **Home cards section:** "Weather card" and "System card" switches (default on).
   Home reads them in `onResume`. Weather off: the card is gone, the weather
   timers do not run and the status bar temperature is hidden. System card off:
@@ -265,12 +294,12 @@ An in-activity overlay, not a dialog window. Implemented in `Sheet.kt`.
 - Any parent of a view that scales on focus needs `clipChildren = false` **and**
   `clipToPadding = false`. Without them, the zoom is cut to the old size and
   the rounded corners look square. We hit this bug in v1.
-- Timers (clock, system card every 5 s, weather every 30 min) run only while the
+- Timers (clock, system card every 5 s, weather every 15, 30 or 60 min) run only while the
   activity is resumed.
 - All disk, network and bitmap work runs on the single background executor.
   Post the results to the main thread.
-- No personal data in the repo. The weather location comes from the untracked
-  `local.properties` file, and the device name comes from system settings.
+- No personal data in the repo. The weather location is chosen on the box (the
+  untracked `local.properties` file is only a default), and the device name comes from system settings.
 
 ## 7. Process for design changes
 

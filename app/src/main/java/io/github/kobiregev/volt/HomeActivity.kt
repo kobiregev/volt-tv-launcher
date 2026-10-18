@@ -185,9 +185,13 @@ class HomeActivity : Activity() {
         main.post(sysTick)
         main.removeCallbacks(weatherTick)
         applyCards()
-        if (weatherCardOn) {
-            if (System.currentTimeMillis() - store.weatherTime > Weather.MAX_AGE_MS) refreshWeather()
-            main.postDelayed(weatherTick, Weather.MAX_AGE_MS)
+        val loc = store.weatherLocation()
+        if (weatherCardOn && loc != null) {
+            // A changed city or unit makes the cached reading stale at once.
+            val stale = WeatherLogic.key(loc, store.weatherUnit) != store.weatherKey ||
+                System.currentTimeMillis() - store.weatherTime > weatherIntervalMs()
+            if (stale) refreshWeather()
+            main.postDelayed(weatherTick, weatherIntervalMs())
         }
         val saved = store.categories()
         if (saved != cats) {
@@ -286,9 +290,11 @@ class HomeActivity : Activity() {
     private val weatherTick = object : Runnable {
         override fun run() {
             refreshWeather()
-            if (resumed) main.postDelayed(this, Weather.MAX_AGE_MS)
+            if (resumed) main.postDelayed(this, weatherIntervalMs())
         }
     }
+
+    private fun weatherIntervalMs() = store.weatherInterval * 60_000L
 
     private val weatherRetry = Runnable { refreshWeather() }
 
@@ -1142,8 +1148,8 @@ class HomeActivity : Activity() {
         sysCard.visibility = if (sysOn) View.VISIBLE else View.GONE
         (sysCard.layoutParams as LinearLayout.LayoutParams).topMargin = if (weatherCardOn) dp(14) else 0
         rightCol.visibility = if (weatherCardOn || sysOn) View.VISIBLE else View.GONE
-        topTemp.visibility = if (weatherCardOn) View.VISIBLE else View.GONE
         sysCard.requestLayout()
+        showWeather()
     }
 
     private fun openSettings(vararg actions: String) {
@@ -1200,44 +1206,61 @@ class HomeActivity : Activity() {
     // ---------------------------------------------------------------- weather / system
 
     private fun refreshWeather() {
-        if (!Weather.enabled || !weatherCardOn) return
+        val loc = store.weatherLocation()
+        if (loc == null || !weatherCardOn) return
+        val unit = store.weatherUnit
+        val key = WeatherLogic.key(loc, unit)
         try {
             exec.execute {
-                val r = Weather.fetch()
-                if (r == null) {
-                    // Network is often not ready right after boot: retry soon, not in 30 min.
-                    main.post {
-                        if (resumed && !destroyed) {
+                val r = Weather.fetch(loc.lat, loc.lon, unit)
+                main.post {
+                    if (destroyed) return@post
+                    if (r == null) {
+                        // Network is often not ready right after boot: retry soon, not at the next interval.
+                        if (resumed) {
                             main.removeCallbacks(weatherRetry)
                             main.postDelayed(weatherRetry, Weather.RETRY_MS)
                         }
+                        return@post
                     }
-                    return@execute
+                    // Ignore a late result when the city or unit changed while it was loading.
+                    val now = store.weatherLocation()
+                    if (now == null || WeatherLogic.key(now, store.weatherUnit) != key) return@post
+                    store.weatherTemp = r.temp
+                    store.weatherCode = r.code
+                    store.weatherTime = System.currentTimeMillis()
+                    store.weatherKey = key
+                    showWeather()
                 }
-                store.weatherTemp = r.temp
-                store.weatherCode = r.code
-                store.weatherTime = System.currentTimeMillis()
-                main.post { if (!destroyed) showWeather() }
             }
         } catch (_: Exception) {
         }
     }
 
     private fun showWeather() {
-        val t = store.weatherTemp
-        val code = store.weatherCode
-        if (!Weather.enabled) {
-            wxCond.text = "Weather off"
+        val loc = store.weatherLocation()
+        if (loc == null) {
+            wxTemp.visibility = View.GONE
+            wxIcon.setImageDrawable(null)
+            wxCond.text = "Set a city in Volt settings"
+            topTemp.visibility = View.GONE
             return
         }
-        if (t.isNaN() || code < 0) {
-            wxCond.text = "Weather · ${Weather.CITY}"
+        wxTemp.visibility = View.VISIBLE
+        topTemp.visibility = if (weatherCardOn) View.VISIBLE else View.GONE
+        val t = store.weatherTemp
+        val code = store.weatherCode
+        if (store.weatherKey != WeatherLogic.key(loc, store.weatherUnit) || t.isNaN() || code < 0) {
+            wxTemp.text = "--°"
+            topTemp.text = "--°"
+            wxIcon.setImageDrawable(null)
+            wxCond.text = "Weather · ${loc.city}"
             return
         }
         val s = "${Math.round(t)}°"
         wxTemp.text = s
         topTemp.text = s
-        wxCond.text = "${Weather.condition(code)} · ${Weather.CITY}"
+        wxCond.text = "${Weather.condition(code)} · ${loc.city}"
         wxIcon.setImageResource(Weather.icon(code))
     }
 

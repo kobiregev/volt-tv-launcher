@@ -11,9 +11,13 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
+import android.text.Editable
 import android.text.InputFilter
 import android.text.InputType
+import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
@@ -93,6 +97,8 @@ private val DPAD = setOf(
 
 private class Section(val title: String, val iconRes: Int, val build: () -> Unit)
 
+private enum class WeatherPage { MAIN, CITY, PRESET }
+
 private sealed interface Editing {
     class Rename(val id: String) : Editing
 
@@ -101,6 +107,7 @@ private sealed interface Editing {
 
 class SettingsActivity : Activity() {
     private val exec: ExecutorService = Executors.newSingleThreadExecutor()
+    private val main = Handler(Looper.getMainLooper())
     private lateinit var store: Store
     private var density = 1f
     private var destroyed = false
@@ -108,6 +115,7 @@ class SettingsActivity : Activity() {
     private lateinit var sectionList: LinearLayout
     private lateinit var detailTitle: TextView
     private lateinit var rows: LinearLayout
+    private lateinit var scroll: ScrollView
 
     // left column
     private val sections = ArrayList<Section>()
@@ -118,6 +126,14 @@ class SettingsActivity : Activity() {
     // right column: focusable rows in order (pills and the editor are not in this list)
     private val detailRows = ArrayList<View>()
     private var rendering = false
+
+    // weather state
+    private var page = WeatherPage.MAIN
+    private var cityRow: View? = null
+    private var resultsBox: LinearLayout? = null
+    private val resultRows = ArrayList<View>()
+    private var searchGen = 0
+    private val searchRun = Runnable { editor?.let { runSearch(it.text.toString()) } }
 
     // categories state
     private var cats: List<Category> = Categories.DEFAULTS
@@ -166,6 +182,7 @@ class SettingsActivity : Activity() {
 
     override fun onDestroy() {
         destroyed = true
+        main.removeCallbacksAndMessages(null)
         exec.shutdownNow()
         super.onDestroy()
     }
@@ -175,6 +192,7 @@ class SettingsActivity : Activity() {
     override fun onBackPressed() {
         when {
             editing != null -> cancelEdit()
+            page != WeatherPage.MAIN -> leavePage(focusCity = true)
             expandedId != null -> collapseStrip(focusRow = true)
             else -> finish()
         }
@@ -218,14 +236,15 @@ class SettingsActivity : Activity() {
             clipChildren = false
             clipToPadding = false
         }
-        val scroll = ScrollView(this).apply {
+        scroll = ScrollView(this).apply {
             isVerticalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
             addView(rows, FrameLayout.LayoutParams(-1, -2))
         }
         detail.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(14) })
 
-        // Sections, in list order. A "Weather" section goes first when it exists.
+        // Sections, in list order.
+        sections.add(Section("Weather", R.drawable.wx_partly) { renderWeather() })
         sections.add(Section("Categories", R.drawable.ic_category) { renderCategories() })
         sections.add(Section("Home cards", R.drawable.ic_grid) { renderCards() })
         sections.add(Section("About Volt", R.drawable.ic_info) { renderAbout() })
@@ -257,6 +276,8 @@ class SettingsActivity : Activity() {
         current = i
         editing = null
         expandedId = null
+        page = WeatherPage.MAIN
+        cancelSearch()
         for ((k, p) in sectionParts.withIndex()) p.selected = k == i
         detailTitle.text = sections[i].title
         sections[i].build()
@@ -273,6 +294,9 @@ class SettingsActivity : Activity() {
             pillByName.clear()
             addRow = null
             editor = null
+            cityRow = null
+            resultsBox = null
+            resultRows.clear()
             block()
         } finally {
             rendering = false
@@ -300,7 +324,11 @@ class SettingsActivity : Activity() {
     override fun dispatchKeyEvent(ev: KeyEvent): Boolean {
         if (ev.action == KeyEvent.ACTION_DOWN) {
             val f = currentFocus
-            if (f != null && f !is EditText && navigate(f, ev.keyCode)) return true
+            if (f is EditText) {
+                if (f === editor && page == WeatherPage.CITY && searchKey(ev.keyCode)) return true
+            } else if (f != null && navigate(f, ev.keyCode)) {
+                return true
+            }
         }
         return super.dispatchKeyEvent(ev)
     }
@@ -349,12 +377,249 @@ class SettingsActivity : Activity() {
                 right -> {}
                 else -> {
                     if (expandedId != null) collapseStrip(focusRow = false)
+                    if (page != WeatherPage.MAIN) leavePage(focusCity = false)
                     sectionParts[current].view.requestFocus()
                 }
             }
             return true
         }
         return false
+    }
+
+    // ---------------------------------------------------------------- weather
+
+    private fun renderWeather(): Unit = when (page) {
+        WeatherPage.MAIN -> renderWeatherMain()
+        WeatherPage.CITY -> renderCity()
+        WeatherPage.PRESET -> renderPreset()
+    }
+
+    private fun renderWeatherMain(): Unit = rebuild {
+        detailTitle.text = "Weather"
+        val city = Rows.build(
+            this,
+            R.drawable.ic_map_pin,
+            "City",
+            value = store.weatherLocation()?.city ?: "Not set",
+            chevron = true
+        )
+        city.view.setOnClickListener { openPage(WeatherPage.CITY) }
+        cityRow = addDetailRow(city)
+
+        val unit = Rows.build(this, R.drawable.wx_clear, "Temperature", value = WeatherLogic.unitLabel(store.weatherUnit))
+        unit.view.setOnClickListener {
+            store.weatherUnit = WeatherLogic.nextUnit(store.weatherUnit)
+            unit.value?.text = WeatherLogic.unitLabel(store.weatherUnit)
+        }
+        addDetailRow(unit)
+
+        val every = Rows.build(this, R.drawable.ic_refresh, "Update every", value = WeatherLogic.intervalLabel(store.weatherInterval))
+        every.view.setOnClickListener {
+            store.weatherInterval = WeatherLogic.nextInterval(store.weatherInterval)
+            every.value?.text = WeatherLogic.intervalLabel(store.weatherInterval)
+        }
+        addDetailRow(every)
+
+        rows.addView(
+            tv("Weather data from Open-Meteo. No account needed.", 13f, C_SEC).apply { setPadding(dp(18), 0, dp(18), 0) },
+            LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) }
+        )
+    }
+
+    private fun openPage(p: WeatherPage) {
+        page = p
+        renderWeather()
+        scroll.scrollTo(0, 0)
+        if (p == WeatherPage.CITY) editor?.requestFocus() else detailRows.firstOrNull()?.requestFocus()
+    }
+
+    /** Closes the City or Preset page and shows the Weather detail again. */
+    private fun leavePage(focusCity: Boolean) {
+        hideKeyboard()
+        cancelSearch()
+        page = WeatherPage.MAIN
+        renderWeather()
+        scroll.scrollTo(0, 0)
+        if (focusCity) cityRow?.requestFocus()
+    }
+
+    private fun chooseLocation(city: String, lat: String, lon: String) {
+        store.setWeatherLocation(city, lat, lon)
+        leavePage(focusCity = true)
+    }
+
+    private fun cancelSearch() {
+        searchGen++
+        main.removeCallbacks(searchRun)
+    }
+
+    private fun renderCity(): Unit = rebuild {
+        detailTitle.text = "City"
+        val ed = searchEdit()
+        editor = ed
+        detailRows.add(ed)
+        rows.addView(searchRow(ed), rowParams())
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        resultsBox = box
+        rows.addView(box, LinearLayout.LayoutParams(-1, -2))
+        rows.addView(
+            View(this).apply { setBackgroundColor(0xFF2C2F33.toInt()) },
+            LinearLayout.LayoutParams(-1, dp(1)).apply {
+                topMargin = dp(8)
+                bottomMargin = dp(8)
+            }
+        )
+        val pick = Rows.build(this, R.drawable.ic_list, "Pick from a list", value = "No keyboard needed", chevron = true)
+        pick.view.setOnClickListener { openPage(WeatherPage.PRESET) }
+        addDetailRow(pick)
+    }
+
+    private fun renderPreset(): Unit = rebuild {
+        detailTitle.text = "Pick a city"
+        for (c in PresetCities.ALL) {
+            val r = Rows.build(this, R.drawable.ic_map_pin, c.name, value = c.country)
+            r.view.setOnClickListener { chooseLocation(c.name, WeatherLogic.coord(c.lat), WeatherLogic.coord(c.lon)) }
+            addDetailRow(r)
+        }
+    }
+
+    private fun searchEdit(): NameEdit = NameEdit(this).apply {
+        hint = "Search a city"
+        setHintTextColor(C_SEC)
+        setTextColor(C_TEXT)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+        includeFontPadding = false
+        background = null
+        setPadding(0, 0, 0, 0)
+        isSingleLine = true
+        maxLines = 1
+        filters = arrayOf(InputFilter.LengthFilter(40))
+        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+        imeOptions = EditorInfo.IME_ACTION_DONE or EditorInfo.IME_FLAG_NO_EXTRACT_UI or EditorInfo.IME_FLAG_NO_FULLSCREEN
+        id = View.generateViewId()
+        // The activity moves focus by hand (see searchKey), so the system never leaves this field.
+        nextFocusUpId = id
+        nextFocusDownId = id
+        nextFocusLeftId = id
+        nextFocusRightId = id
+        onCancel = { leavePage(focusCity = true) }
+        setOnEditorActionListener { _, action, ev ->
+            val enter = ev != null && ev.keyCode == KeyEvent.KEYCODE_ENTER && ev.action == KeyEvent.ACTION_DOWN
+            if (action == EditorInfo.IME_ACTION_DONE || enter) {
+                main.removeCallbacks(searchRun)
+                runSearch(text.toString())
+                hideKeyboard()
+                true
+            } else {
+                false
+            }
+        }
+        addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+
+            override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+
+            override fun afterTextChanged(s: Editable?) {
+                main.removeCallbacks(searchRun)
+                if (WeatherLogic.geocodeUrl(s?.toString().orEmpty()) != null) {
+                    main.postDelayed(searchRun, 600)
+                } else {
+                    searchGen++
+                    showResults(emptyList())
+                }
+            }
+        })
+    }
+
+    private fun searchRow(ed: NameEdit): View = LinearLayout(this).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(18), 0, dp(18), 0)
+        background = rr(C_TRACK, 9).apply { setStroke(dp(2), C_BLUE) }
+        addView(
+            ImageView(context).apply {
+                setImageResource(R.drawable.ic_map_pin)
+                setColorFilter(C_ICON)
+            },
+            LinearLayout.LayoutParams(dp(18), dp(18))
+        )
+        addView(ed, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(12) })
+    }
+
+    /**
+     * Keys on the search field. Down goes to the first result (or "Pick from a list") and Left at the
+     * start of the text goes to the section column. Up stays. Everything else is the field's own.
+     */
+    private fun searchKey(key: Int): Boolean {
+        val ed = editor ?: return false
+        return when (key) {
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                hideKeyboard()
+                detailRows.getOrNull(1)?.requestFocus()
+                true
+            }
+            KeyEvent.KEYCODE_DPAD_UP -> true
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                if (ed.selectionStart > 0) {
+                    false
+                } else {
+                    hideKeyboard()
+                    leavePage(focusCity = false)
+                    sectionParts[current].view.requestFocus()
+                    true
+                }
+            }
+            else -> false
+        }
+    }
+
+    private fun setResultViews(views: List<View>, focusable: Boolean) {
+        val box = resultsBox ?: return
+        box.removeAllViews()
+        detailRows.removeAll(resultRows.toSet())
+        resultRows.clear()
+        for (v in views) box.addView(v, rowParams())
+        if (focusable) {
+            resultRows.addAll(views)
+            detailRows.addAll(1, views)
+        }
+    }
+
+    private fun showStatus(text: String) {
+        val r = Rows.build(this, R.drawable.ic_info, text, focusable = false)
+        r.label.setTextColor(C_SEC)
+        setResultViews(listOf(r.view), focusable = false)
+    }
+
+    private fun showResults(list: List<Weather.GeoResult>) {
+        val views = list.map { g ->
+            val r = Rows.build(this, R.drawable.ic_map_pin, g.name, value = WeatherLogic.resultLine(g.admin1, g.country))
+            r.view.setOnClickListener { chooseLocation(g.name, WeatherLogic.coord(g.lat), WeatherLogic.coord(g.lon)) }
+            r.view
+        }
+        setResultViews(views, focusable = true)
+    }
+
+    private fun runSearch(q: String) {
+        val url = WeatherLogic.geocodeUrl(q) ?: return
+        val gen = ++searchGen
+        showStatus("Searching\u2026")
+        try {
+            exec.execute {
+                val res = Weather.search(url)
+                runOnUiThread {
+                    // Late result: the field changed, or the page was closed.
+                    if (destroyed || gen != searchGen || page != WeatherPage.CITY) return@runOnUiThread
+                    when {
+                        res == null -> showStatus("Can't reach Open-Meteo. Try again or pick from the list.")
+                        res.isEmpty() -> showStatus("No matches")
+                        else -> showResults(res)
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            showStatus("Can't reach Open-Meteo. Try again or pick from the list.")
+        }
     }
 
     // ---------------------------------------------------------------- categories

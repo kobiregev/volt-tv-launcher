@@ -14,7 +14,7 @@ A fast, minimal Android TV home launcher with a Tesla-style UI, built for low-RA
 - Automatic **All / Streaming / System** categories (override per app)
 - Options menu per app (long-press OK, MENU key, or "Options"): move left/right, change category, hide, app info, show hidden apps
 - Status area: clock, Wi-Fi band and signal quality, Ethernet state, free RAM
-- Optional weather from [Open-Meteo](https://open-meteo.com/) (no API key)
+- Weather from [Open-Meteo](https://open-meteo.com/) (no API key). You set the city, the unit (°C/°F) and the update interval on the box, in Volt settings, with search or a list of large cities
 - Entirely D-pad driven, with smooth focus animation
 
 ## Design principles
@@ -68,13 +68,14 @@ Create an untracked `local.properties` in the project root:
 ```
 sdk.dir=/path/to/Android/Sdk
 
-# Optional weather location. Leave empty to turn weather off.
+# Optional first default for the weather city. You can change it on the box in Volt settings.
+# Leave empty to start with no city.
 weather.city=Berlin
 weather.lat=52.52
 weather.lon=13.41
 ```
 
-The location is compiled into the APK as `BuildConfig` fields and is never committed.
+The values are compiled into the APK as `BuildConfig` fields and are never committed. They are only the first default: a city that you choose in Volt settings replaces them.
 
 ### Version
 
@@ -144,7 +145,9 @@ app/src/main/java/io/github/kobiregev/volt/
   HomeActivity.kt   UI, focus handling, options menu, status area
   Model.kt          app loading, persistence (Store), tile bitmaps and colors
   Logic.kt          pure logic: categories, ordering/moving, weather text, Wi-Fi text
-  Weather.kt        Open-Meteo fetch and icon mapping
+  WeatherLogic.kt  pure weather settings logic: URLs, labels, validation
+  PresetCities.kt   list of large world cities for the weather picker
+  Weather.kt        Open-Meteo forecast and city search, icon mapping
 app/src/test/       JVM unit tests for Logic.kt
 docs/               design system and research
 .github/            CI, release workflow, templates
@@ -161,7 +164,6 @@ v2 ideas:
 - Live move mode for the dock
 - User-editable categories
 - Bottom-sheet options instead of AlertDialog
-- Weather city setting (instead of build time)
 - Recent apps
 
 ## Contributing

@@ -80,6 +80,37 @@ class Store(ctx: Context) {
         ed.putInt("schema", 2).apply()
     }
 
+    /** Saved location, else the build-time default from local.properties, else null (no location). */
+    fun weatherLocation(): WeatherLoc? = if (sp.contains("w_lat")) {
+        WeatherLogic.location(sp.getString("w_city", null), sp.getString("w_lat", null), sp.getString("w_lon", null))
+    } else {
+        WeatherLogic.location(BuildConfig.WEATHER_CITY, BuildConfig.WEATHER_LAT, BuildConfig.WEATHER_LON)
+    }
+
+    fun setWeatherLocation(city: String, lat: String, lon: String) = sp.edit()
+        .putString("w_city", city).putString("w_lat", lat).putString("w_lon", lon).apply()
+
+    /** "c" or "f". */
+    var weatherUnit: String
+        get() = WeatherLogic.normalizeUnit(sp.getString("w_unit", "c"))
+        set(v) {
+            sp.edit().putString("w_unit", WeatherLogic.normalizeUnit(v)).apply()
+        }
+
+    /** Update interval in minutes: 15, 30 or 60. */
+    var weatherInterval: Int
+        get() = WeatherLogic.normalizeInterval(sp.getInt("w_interval", WeatherLogic.DEFAULT_INTERVAL))
+        set(v) {
+            sp.edit().putInt("w_interval", WeatherLogic.normalizeInterval(v)).apply()
+        }
+
+    /** [WeatherLogic.key] of the location and unit the cached reading belongs to. */
+    var weatherKey: String
+        get() = sp.getString("w_key", "") ?: ""
+        set(v) {
+            sp.edit().putString("w_key", v).apply()
+        }
+
     var weatherTemp: Float
         get() = sp.getFloat("w_temp", Float.NaN)
         set(v) {

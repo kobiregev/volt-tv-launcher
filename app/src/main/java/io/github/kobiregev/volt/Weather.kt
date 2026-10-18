@@ -5,36 +5,62 @@ import java.net.URL
 import org.json.JSONObject
 
 object Weather {
-    // Set weather.city / weather.lat / weather.lon in local.properties (see README).
-    val CITY: String = BuildConfig.WEATHER_CITY
-    private val LAT: String = BuildConfig.WEATHER_LAT
-    private val LON: String = BuildConfig.WEATHER_LON
-    val enabled: Boolean get() = LAT.isNotBlank() && LON.isNotBlank()
-    const val MAX_AGE_MS = 30 * 60 * 1000L
     const val RETRY_MS = 2 * 60 * 1000L
 
     class Result(val temp: Float, val code: Int)
 
-    /** Blocking; call from a background thread. */
-    fun fetch(): Result? {
-        if (!enabled) return null
+    class GeoResult(val name: String, val admin1: String?, val country: String?, val lat: Double, val lon: Double)
+
+    /** Blocking GET with timeouts; null on any error. Call from a background thread. */
+    private fun get(url: String): String? {
         var conn: HttpURLConnection? = null
         return try {
-            val url = URL(
-                "https://api.open-meteo.com/v1/forecast?latitude=$LAT&longitude=$LON" +
-                    "&current=temperature_2m,weather_code&timezone=auto"
-            )
-            conn = url.openConnection() as HttpURLConnection
+            conn = URL(url).openConnection() as HttpURLConnection
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
             if (conn.responseCode != 200) return null
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
-            val cur = JSONObject(body).getJSONObject("current")
-            Result(cur.getDouble("temperature_2m").toFloat(), cur.getInt("weather_code"))
+            conn.inputStream.bufferedReader().use { it.readText() }
         } catch (t: Throwable) {
             null
         } finally {
             conn?.disconnect()
+        }
+    }
+
+    /** Blocking; call from a background thread. */
+    fun fetch(lat: String, lon: String, unit: String): Result? {
+        val body = get(WeatherLogic.forecastUrl(lat, lon, unit)) ?: return null
+        return try {
+            val cur = JSONObject(body).getJSONObject("current")
+            Result(cur.getDouble("temperature_2m").toFloat(), cur.getInt("weather_code"))
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
+    /** City search. Null on error, an empty list when nothing matches. Call from a background thread. */
+    fun search(url: String): List<GeoResult>? {
+        val body = get(url) ?: return null
+        return try {
+            val arr = JSONObject(body).optJSONArray("results") ?: return emptyList()
+            val out = ArrayList<GeoResult>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val name = o.optString("name", "")
+                if (name.isEmpty() || !o.has("latitude") || !o.has("longitude")) continue
+                out.add(
+                    GeoResult(
+                        name,
+                        o.optString("admin1", "").ifEmpty { null },
+                        o.optString("country", "").ifEmpty { null },
+                        o.getDouble("latitude"),
+                        o.getDouble("longitude")
+                    )
+                )
+            }
+            out
+        } catch (t: Throwable) {
+            null
         }
     }
 
