@@ -2,6 +2,8 @@ package io.github.kobiregev.volt
 
 /** Pure, Android-free launcher logic. Kept free of framework types so it can be unit-tested on the JVM. */
 object Categorizer {
+    // Values of ApplicationInfo.category, copied so this file needs no Android import.
+    const val CATEGORY_GAME = 0 // ApplicationInfo.CATEGORY_GAME
     const val CATEGORY_AUDIO = 1 // ApplicationInfo.CATEGORY_AUDIO
     const val CATEGORY_VIDEO = 2 // ApplicationInfo.CATEGORY_VIDEO
 
@@ -9,19 +11,37 @@ object Categorizer {
 
     // File managers only: "file" alone would also match e.g. "...profile...".
     private val FILES = Regex("(?i)(^|\\.)files?($|\\.)|file(manager|explorer|browser|commander)")
+
+    // Conservative name hints for tools: browsers, VPN, speed test, downloader, terminal, adb, remote.
+    private val TOOLS = Regex(
+        "(?i)browser|firefox|(^|\\.)chrome($|\\.)|vpn|speedtest|downloader|termux|terminal|(^|\\.)adb|adbfire|adblink|remote"
+    )
     private val MEDIA = listOf(
         "netflix", "youtube", "stremio", "jellyfin", "cellcom",
         "disney", "amazon", "plex", "kodi", "spotify"
     )
 
-    /** Default dock category of an app: [CAT_SYSTEM] or [CAT_STREAMING]. */
-    fun defaultCategory(pkg: String, isSystem: Boolean, appCategory: Int): Int {
-        if (pkg in SYSTEM_PKGS || FILES.containsMatchIn(pkg)) return CAT_SYSTEM
+    /**
+     * Default category id of an app. Rules, first match wins:
+     * 1. v1 system rules (known system packages, system apps without a media hint) -> system
+     * 2. ApplicationInfo.category: game -> games, audio -> music, video -> streaming
+     * 3. package name hints for tools (file managers, browsers, VPN, ...) -> tools
+     * 4. known media packages -> streaming
+     * 5. everything else -> streaming
+     */
+    fun defaultCategory(pkg: String, isSystem: Boolean, appCategory: Int): String {
+        if (pkg in SYSTEM_PKGS) return Categories.SYSTEM
         if (isSystem) {
             val media = appCategory == CATEGORY_VIDEO || appCategory == CATEGORY_AUDIO || MEDIA.any { pkg.contains(it) }
-            if (!media) return CAT_SYSTEM
+            if (!media) return Categories.SYSTEM
         }
-        return CAT_STREAMING
+        when (appCategory) {
+            CATEGORY_GAME -> return Categories.GAMES
+            CATEGORY_AUDIO -> return Categories.MUSIC
+            CATEGORY_VIDEO -> return Categories.STREAMING
+        }
+        if (FILES.containsMatchIn(pkg) || TOOLS.containsMatchIn(pkg)) return Categories.TOOLS
+        return Categories.STREAMING
     }
 }
 

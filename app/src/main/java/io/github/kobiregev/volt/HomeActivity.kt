@@ -55,6 +55,15 @@ private class SmoothHsv(c: Context) : HorizontalScrollView(c) {
     override fun requestChildRectangleOnScreen(child: View, rectangle: android.graphics.Rect, immediate: Boolean) = false
 }
 
+/** Scroll view for the category segments: capped width, scrolled by us. */
+private class SegScroll(c: Context, private val maxWidth: Int) : HorizontalScrollView(c) {
+    override fun requestChildRectangleOnScreen(child: View, rectangle: android.graphics.Rect, immediate: Boolean) = false
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        super.onMeasure(MeasureSpec.makeMeasureSpec(maxWidth, MeasureSpec.AT_MOST), heightMeasureSpec)
+    }
+}
+
 private class Bar(c: Context) : View(c) {
     var frac = 0f
         set(v) {
@@ -87,7 +96,8 @@ class HomeActivity : Activity() {
     private var allEntries: List<AppEntry> = emptyList()
     private var allApps: List<AppEntry> = emptyList() // visible, sorted
     private var shown: List<AppEntry> = emptyList()
-    private var category = CAT_ALL
+    private var category = Categories.ALL
+    private var cats: List<Category> = Categories.DEFAULTS
     private var heroEntry: AppEntry? = null
     private var lastTilePkg: String? = null
     private var pendingInitialFocus = true
@@ -108,7 +118,9 @@ class HomeActivity : Activity() {
     private lateinit var topTemp: TextView
     private lateinit var topWifi: ImageView
     private lateinit var seg: LinearLayout
+    private lateinit var segScroll: HorizontalScrollView
     private val segViews = ArrayList<TextView>()
+    private var segCats: List<Category> = emptyList()
     private lateinit var quickRow: LinearLayout
     private lateinit var hsv: SmoothHsv
     private lateinit var dockRow: LinearLayout
@@ -135,6 +147,7 @@ class HomeActivity : Activity() {
         super.onCreate(savedInstanceState)
         density = resources.displayMetrics.density
         store = Store(this)
+        cats = store.categories()
         visuals = Visuals(this)
         val content = buildUi()
         frame = FrameLayout(this)
@@ -169,6 +182,11 @@ class HomeActivity : Activity() {
         main.removeCallbacks(weatherTick)
         if (System.currentTimeMillis() - store.weatherTime > Weather.MAX_AGE_MS) refreshWeather()
         main.postDelayed(weatherTick, Weather.MAX_AGE_MS)
+        val saved = store.categories()
+        if (saved != cats) {
+            cats = saved
+            rebuildDock(null, false)
+        }
         if (currentFocus == null) focusFirstTileOrSeg()
     }
 
@@ -195,7 +213,7 @@ class HomeActivity : Activity() {
         if (intent.hasCategory(Intent.CATEGORY_HOME)) {
             endMove()
             sheet.close()
-            setCategory(CAT_ALL, focusFirst = true)
+            setCategory(Categories.ALL, focusFirst = true)
             hsv.scrollTo(0, 0)
         }
     }
@@ -417,20 +435,19 @@ class HomeActivity : Activity() {
         val mid = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         root.addView(mid, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(14) })
         seg = LinearLayout(this).apply {
-            background = rr(C_CARD, 9)
-            setPadding(dp(3), dp(3), dp(3), dp(3))
             isFocusable = true
             defaultFocusHighlightEnabled = false
             id = View.generateViewId()
             setOnKeyListener { _, code, ev ->
                 if (ev.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                val i = segCats.indexOfFirst { it.id == category }
                 when (code) {
                     KeyEvent.KEYCODE_DPAD_LEFT -> {
-                        if (category > 0) setCategory(category - 1)
+                        if (i > 0) setCategory(segCats[i - 1].id)
                         true
                     }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> if (category < 2) {
-                        setCategory(category + 1)
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> if (i in 0 until segCats.size - 1) {
+                        setCategory(segCats[i + 1].id)
                         true
                     } else {
                         false
@@ -440,15 +457,19 @@ class HomeActivity : Activity() {
             }
             setOnFocusChangeListener { _, _ -> updateSeg() }
         }
-        for (i in 0..2) {
-            val t = tv(catName(i), 14f, C_TEXT).apply {
-                gravity = Gravity.CENTER
-                setPadding(dp(18), 0, dp(18), 0)
-            }
-            segViews.add(t)
-            seg.addView(t, LinearLayout.LayoutParams(-2, -1))
+        segScroll = SegScroll(this, dp(560)).apply {
+            isHorizontalScrollBarEnabled = false
+            clipChildren = false
+            clipToPadding = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(seg, FrameLayout.LayoutParams(-2, -1))
         }
-        mid.addView(seg, LinearLayout.LayoutParams(-2, -1))
+        val segTrack = FrameLayout(this).apply {
+            background = rr(C_CARD, 9)
+            setPadding(dp(3), dp(3), dp(3), dp(3))
+            addView(segScroll, FrameLayout.LayoutParams(-2, -1))
+        }
+        mid.addView(segTrack, LinearLayout.LayoutParams(-2, -1))
         mid.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         quickRow = LinearLayout(this)
         mid.addView(quickRow, LinearLayout.LayoutParams(-2, -1))
@@ -500,7 +521,7 @@ class HomeActivity : Activity() {
         root.addView(dock, LinearLayout.LayoutParams(-1, -2))
         dockBar = dock
 
-        updateSeg()
+        rebuildSegs()
         return root
     }
 
@@ -608,20 +629,48 @@ class HomeActivity : Activity() {
         )
     }
 
+    /** Shows "All" plus the categories that have apps. Switches to "All" if the current category is gone. */
+    private fun rebuildSegs() {
+        val counts = HashMap<String, Int>()
+        for (e in allApps) counts.merge(catOf(e), 1, Int::plus)
+        val vis = Categories.visibleSegments(cats, counts)
+        if (vis.none { it.id == category }) category = Categories.ALL
+        if (vis != segCats) {
+            segCats = vis
+            segViews.clear()
+            seg.removeAllViews()
+            for (c in vis) {
+                val t = tv(c.name, 14f, C_TEXT).apply {
+                    gravity = Gravity.CENTER
+                    setPadding(dp(18), 0, dp(18), 0)
+                }
+                segViews.add(t)
+                seg.addView(t, LinearLayout.LayoutParams(-2, -1))
+            }
+        }
+        updateSeg()
+    }
+
     private fun updateSeg() {
         val focused = seg.hasFocus()
-        for (i in 0..2) {
-            segViews[i].background = if (i == category) rr(if (focused) C_BLUE else C_SEL, 7) else null
-            segViews[i].setTextColor(if (i == category) Color.WHITE else C_SEC)
+        var sel: View? = null
+        for (i in segViews.indices) {
+            val on = segCats[i].id == category
+            if (on) sel = segViews[i]
+            segViews[i].background = if (on) rr(if (focused) C_BLUE else C_SEL, 7) else null
+            segViews[i].setTextColor(if (on) Color.WHITE else C_SEC)
+        }
+        val v = sel ?: return
+        // Keep the selected segment centered when the row is wider than its box.
+        segScroll.post {
+            val target = (v.left + v.width / 2 - segScroll.width / 2).coerceIn(0, maxOf(0, seg.width - segScroll.width))
+            segScroll.smoothScrollTo(target, 0)
         }
     }
 
     // ---------------------------------------------------------------- dock
 
-    private fun catOf(e: AppEntry): Int {
-        val o = store.catOverride(e.pkg)
-        return if (o != 0) o else e.defCat
-    }
+    private fun catOf(e: AppEntry): String = Categories.resolve(store.catOverride(e.pkg), e.defCat, cats)
 
     private fun applySort() {
         val byPkg = allEntries.associateBy { it.pkg }
@@ -646,9 +695,8 @@ class HomeActivity : Activity() {
         }
     }
 
-    private fun setCategory(c: Int, focusFirst: Boolean = false) {
+    private fun setCategory(c: String, focusFirst: Boolean = false) {
         category = c
-        updateSeg()
         rebuildDock(null, focusFirst)
     }
 
@@ -657,7 +705,8 @@ class HomeActivity : Activity() {
         val wasInDock = focusedTile != null
         val keepPkg = focusPkg ?: (focusedTile?.tag as? AppEntry)?.pkg
         dockRow.removeAllViews()
-        shown = allApps.filter { category == CAT_ALL || catOf(it) == category }
+        rebuildSegs()
+        shown = allApps.filter { category == Categories.ALL || catOf(it) == category }
         var target: View? = null
         for (e in shown) {
             val t = makeTile(e)
@@ -795,7 +844,7 @@ class HomeActivity : Activity() {
             animateHero(C_CARD)
             return
         }
-        heroCat.text = if (moving != null) moveText() else catName(catOf(e))
+        heroCat.text = if (moving != null) moveText() else Categories.nameOf(cats, catOf(e))
         heroName.text = e.label
         heroIcon.setImageDrawable(null)
         loadVisual(e) { v ->
@@ -820,16 +869,64 @@ class HomeActivity : Activity() {
 
     // ---------------------------------------------------------------- options
 
-    private fun showOptions(e: AppEntry) {
-        if (sheet.isOpen) return
-        val cur = catOf(e)
-        val other = if (cur == CAT_SYSTEM) CAT_STREAMING else CAT_SYSTEM
+    private fun appHeader(e: AppEntry, sub: String): View {
         val tile = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_XY }
         loadVisual(e) { v ->
             if (!v.hasBanner) tile.background = rr(v.tileBg, 6)
             tile.setImageBitmap(v.tile)
         }
-        val head = sheet.header(tile, e.label, "${catName(cur)} · position ${shown.indexOf(e) + 1} of ${shown.size}")
+        return sheet.header(tile, e.label, sub)
+    }
+
+    /** Second sheet: pick a category for [e], or "Auto". */
+    private fun showCategoryPicker(e: AppEntry) {
+        val ov = store.catOverride(e.pkg)?.takeIf { it != Categories.ALL && cats.any { c -> c.id == it } }
+        val auto = Categories.resolve(null, e.defCat, cats)
+        fun pick(id: String?): () -> Unit = {
+            store.setCat(e.pkg, id)
+            sheet.close()
+            val keep = if (category == Categories.ALL || category == catOf(e)) e.pkg else null
+            heroEntry = null
+            rebuildDock(keep, keep == null)
+        }
+        val items = ArrayList<SheetItem>()
+        items.add(
+            SheetRow(
+                "Auto (${Categories.nameOf(cats, auto)})",
+                R.drawable.ic_cat_auto,
+                trailingIcon = if (ov == null) R.drawable.ic_check else null,
+                onClick = pick(null)
+            )
+        )
+        var focus = 0
+        for (c in cats) {
+            if (c.id == Categories.ALL) continue
+            if (c.id == ov) focus = items.size
+            items.add(
+                SheetRow(
+                    c.name,
+                    catIcon(c.id),
+                    trailingIcon = if (c.id == ov) R.drawable.ic_check else null,
+                    onClick = pick(c.id)
+                )
+            )
+        }
+        sheet.show(appHeader(e, "Choose a category"), items, focus)
+    }
+
+    private fun catIcon(id: String): Int = when (id) {
+        "streaming" -> R.drawable.ic_cat_streaming
+        "music" -> R.drawable.ic_cat_music
+        "games" -> R.drawable.ic_cat_games
+        "tools" -> R.drawable.ic_cat_tools
+        "system" -> R.drawable.ic_cat_system
+        else -> R.drawable.ic_category
+    }
+
+    private fun showOptions(e: AppEntry) {
+        if (sheet.isOpen) return
+        val cur = catOf(e)
+        val head = appHeader(e, "${Categories.nameOf(cats, cur)} · position ${shown.indexOf(e) + 1} of ${shown.size}")
 
         // Close first so focus returns to the dock, then run the action (it may rebuild the dock).
         fun act(f: () -> Unit): () -> Unit = {
@@ -843,14 +940,9 @@ class HomeActivity : Activity() {
                 SheetRow(
                     "Category",
                     R.drawable.ic_category,
-                    value = catName(cur),
+                    value = Categories.nameOf(cats, cur),
                     chevron = true,
-                    onClick = act {
-                        store.setCat(e.pkg, other)
-                        val keep = if (category == CAT_ALL || category == other) e.pkg else null
-                        heroEntry = null
-                        rebuildDock(keep, keep == null)
-                    }
+                    onClick = act { showCategoryPicker(e) }
                 ),
                 SheetRow("Hide from dock", R.drawable.ic_hide, onClick = act { hide(e) }),
                 SheetRow(

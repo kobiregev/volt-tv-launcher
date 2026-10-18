@@ -25,6 +25,7 @@ class SheetRow(
     val iconRes: Int,
     val value: String? = null,
     val chevron: Boolean = false,
+    val trailingIcon: Int? = null,
     val onLeft: (() -> Unit)? = null,
     val onRight: (() -> Unit)? = null,
     val onClick: () -> Unit
@@ -78,7 +79,7 @@ class Sheet(private val activity: Activity, private val root: FrameLayout) {
         addView(col, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(14) })
     }
 
-    fun show(header: View?, items: List<SheetItem>) {
+    fun show(header: View?, items: List<SheetItem>, focusIndex: Int = 0) {
         if (isOpen) return
         removeNow()
         isOpen = true
@@ -152,7 +153,7 @@ class Sheet(private val activity: Activity, private val root: FrameLayout) {
                 return true
             }
         })
-        rows.firstOrNull()?.requestFocus()
+        (rows.getOrNull(focusIndex) ?: rows.firstOrNull())?.requestFocus()
     }
 
     fun close() {
@@ -186,6 +187,7 @@ class Sheet(private val activity: Activity, private val root: FrameLayout) {
         val label = tv(row.label, 16f, C_TEXT)
         val value = row.value?.let { tv(it, 15f, C_SEC) }
         val chev = if (row.chevron) icon(R.drawable.ic_chevron_right, C_ICON, 16) else null
+        val trail = row.trailingIcon?.let { icon(it, C_BLUE, 16) }
         return LinearLayout(activity).apply {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(18), 0, dp(18), 0)
@@ -199,11 +201,15 @@ class Sheet(private val activity: Activity, private val root: FrameLayout) {
             if (chev != null) {
                 addView(chev, LinearLayout.LayoutParams(dp(16), dp(16)).apply { leftMargin = dp(8) })
             }
+            if (trail != null) {
+                addView(trail, LinearLayout.LayoutParams(dp(16), dp(16)).apply { leftMargin = dp(8) })
+            }
             setOnClickListener { row.onClick() }
             setOnFocusChangeListener { _, has ->
                 bg.setColor(if (has) C_BLUE else Color.TRANSPARENT)
                 ic.setColorFilter(if (has) Color.WHITE else C_ICON)
                 chev?.setColorFilter(if (has) Color.WHITE else C_ICON)
+                trail?.setColorFilter(if (has) Color.WHITE else C_BLUE)
                 label.setTextColor(if (has) Color.WHITE else C_TEXT)
                 value?.setTextColor(if (has) 0xFFDCE5FB.toInt() else C_SEC)
             }

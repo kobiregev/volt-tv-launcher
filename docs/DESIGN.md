@@ -150,6 +150,31 @@ OK on the "Move" row closes the sheet and starts live move mode for that tile.
 - **Saving:** the new order of the shown apps is merged into the full order. In a
   filtered category, apps that the filter hides keep their slots.
 
+### Categories
+
+The category list is user data (`Categories.kt`, pure logic). Defaults, in order:
+All, Streaming, Music, Games, Tools, System. "All" is always first and cannot be
+renamed, moved or deleted. Names have at most 24 characters.
+
+- **Auto category** (`Categorizer.defaultCategory`, first match wins): 1) v1
+  system rules (known system packages, system apps without a media hint) ->
+  System; 2) `ApplicationInfo.category`: game -> Games, audio -> Music, video ->
+  Streaming; 3) package name hints for tools (file managers, browser, VPN, speed
+  test, downloader, terminal, adb, remote) -> Tools; 4) known media packages ->
+  Streaming; 5) everything else -> Streaming.
+- **Override:** the user can pick a category per app. It wins while the category
+  exists. If an auto category was deleted, the app goes to Streaming, else to the
+  first category, else to All.
+- **Segmented control:** shows All and the categories that have apps, in list
+  order. It lives in a horizontal scroll view (max 560dp, no scrollbar) and
+  scrolls to keep the selected segment centered. If the current category becomes
+  empty or is deleted, the control switches to All.
+- **Picker sheet:** the "Category" row in the options sheet (value = current
+  name, chevron) closes the sheet and opens a second one. Header sub line:
+  "Choose a category". First row "Auto (name)", then one row per category except
+  All. A blue check icon marks the current choice, and focus starts on it. OK sets
+  or clears the override and closes the sheet.
+
 ### Bottom sheet
 
 An in-activity overlay, not a dialog window. Implemented in `Sheet.kt`.
@@ -161,9 +186,10 @@ An in-activity overlay, not a dialog window. Implemented in `Sheet.kt`.
 - **Header:** 64x36dp app tile, name 18sp medium, sub line 13sp secondary, then a
   1dp divider (`#2C2F33`) and a 10dp gap.
 - **Row:** 44dp high, 18dp side padding, 9dp radius. 18dp icon, 12dp gap, 16sp
-  label. Optional value (15sp secondary) and 16dp chevron on the right. Focused:
+  label. Optional value (15sp secondary), 16dp chevron and 16dp trailing icon (for
+  example a check) on the right. Focused:
   `C_BLUE` fill, white label and icon, value `#DCE5FB`.
-- **Focus:** the first row gets focus on open. Up on the first row and Down on the
+- **Focus:** the first row gets focus on open (or the row given as `focusIndex`). Up on the first row and Down on the
   last row stay put. Left/Right do nothing unless the row sets a handler. The
   screen below is blocked from focus. Focus returns to the previous view on close.
 - **Motion:** slide up 150ms with the scrim fading in; close takes 120ms.
