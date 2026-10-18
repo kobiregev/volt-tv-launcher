@@ -69,7 +69,7 @@ jobs:
         run: rm -f "$RUNNER_TEMP/volt-release.jks"
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/volt-launcher-${{ env.VERSION_NAME }}.apk
           generate_release_notes: true
