@@ -44,6 +44,25 @@ class Store(ctx: Context) {
         if (id == null) remove("cat2:$pkg") else putString("cat2:$pkg", id)
     }.apply()
 
+    /** Removes every user override that points at category [id] (those apps go back to Auto). */
+    fun clearOverridesFor(id: String) {
+        val ed = sp.edit()
+        for ((k, v) in sp.all) if (k.startsWith("cat2:") && v == id) ed.remove(k)
+        ed.apply()
+    }
+
+    /** Home card switches (default on). */
+    var showWeatherCard: Boolean
+        get() = sp.getBoolean("card_weather", true)
+        set(v) {
+            sp.edit().putBoolean("card_weather", v).apply()
+        }
+    var showSystemCard: Boolean
+        get() = sp.getBoolean("card_system", true)
+        set(v) {
+            sp.edit().putBoolean("card_system", v).apply()
+        }
+
     init {
         migrate()
     }

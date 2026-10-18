@@ -1,7 +1,6 @@
 package io.github.kobiregev.volt
 
 import android.app.Activity
-import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
@@ -13,6 +12,7 @@ import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 
 /** One item in a [Sheet]: a [SheetRow] or a [SheetDivider]. */
@@ -100,7 +100,7 @@ class Sheet(private val activity: Activity, private val root: FrameLayout) {
         root.addView(sc, FrameLayout.LayoutParams(-1, -1))
         scrim = sc
 
-        val p = LinearLayout(activity).apply {
+        val p = CappedColumn(activity, dp(500)).apply {
             orientation = LinearLayout.VERTICAL
             val r = 16 * density
             background = GradientDrawable().apply {
@@ -123,10 +123,22 @@ class Sheet(private val activity: Activity, private val root: FrameLayout) {
         }
 
         val rows = ArrayList<View>()
+        val list = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            clipChildren = false
+            clipToPadding = false
+        }
+        val scroll = ScrollView(activity).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            clipChildren = false
+            clipToPadding = false
+            addView(list, FrameLayout.LayoutParams(-1, -2))
+        }
         val lastRow = items.indexOfLast { it is SheetRow }
         for ((i, it) in items.withIndex()) {
             when (it) {
-                is SheetDivider -> p.addView(
+                is SheetDivider -> list.addView(
                     divider(),
                     LinearLayout.LayoutParams(-1, dp(1)).apply {
                         topMargin = dp(8)
@@ -136,10 +148,11 @@ class Sheet(private val activity: Activity, private val root: FrameLayout) {
                 is SheetRow -> {
                     val v = makeRow(it, isFirst = rows.isEmpty(), isLast = i == lastRow)
                     rows.add(v)
-                    p.addView(v, LinearLayout.LayoutParams(-1, dp(44)))
+                    list.addView(v, LinearLayout.LayoutParams(-1, dp(44)))
                 }
             }
         }
+        p.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(p, FrameLayout.LayoutParams(dp(560), -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
         panel = p
 
@@ -182,37 +195,16 @@ class Sheet(private val activity: Activity, private val root: FrameLayout) {
     private fun divider() = View(activity).apply { setBackgroundColor(0xFF2C2F33.toInt()) }
 
     private fun makeRow(row: SheetRow, isFirst: Boolean, isLast: Boolean): View {
-        val bg = rr(Color.TRANSPARENT, 9)
-        val ic = icon(row.iconRes, C_ICON, 18)
-        val label = tv(row.label, 16f, C_TEXT)
-        val value = row.value?.let { tv(it, 15f, C_SEC) }
-        val chev = if (row.chevron) icon(R.drawable.ic_chevron_right, C_ICON, 16) else null
-        val trail = row.trailingIcon?.let { icon(it, C_BLUE, 16) }
-        return LinearLayout(activity).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(18), 0, dp(18), 0)
-            background = bg
-            isFocusable = true
-            isClickable = true
-            defaultFocusHighlightEnabled = false
-            addView(ic)
-            addView(label, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(12) })
-            if (value != null) addView(value)
-            if (chev != null) {
-                addView(chev, LinearLayout.LayoutParams(dp(16), dp(16)).apply { leftMargin = dp(8) })
-            }
-            if (trail != null) {
-                addView(trail, LinearLayout.LayoutParams(dp(16), dp(16)).apply { leftMargin = dp(8) })
-            }
+        val parts = Rows.build(
+            activity,
+            row.iconRes,
+            row.label,
+            value = row.value,
+            chevron = row.chevron,
+            trailingIcon = row.trailingIcon
+        )
+        return parts.view.apply {
             setOnClickListener { row.onClick() }
-            setOnFocusChangeListener { _, has ->
-                bg.setColor(if (has) C_BLUE else Color.TRANSPARENT)
-                ic.setColorFilter(if (has) Color.WHITE else C_ICON)
-                chev?.setColorFilter(if (has) Color.WHITE else C_ICON)
-                trail?.setColorFilter(if (has) Color.WHITE else C_BLUE)
-                label.setTextColor(if (has) Color.WHITE else C_TEXT)
-                value?.setTextColor(if (has) 0xFFDCE5FB.toInt() else C_SEC)
-            }
             setOnKeyListener { _, code, ev ->
                 if (ev.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
                 when (code) {
@@ -230,5 +222,16 @@ class Sheet(private val activity: Activity, private val root: FrameLayout) {
                 }
             }
         }
+    }
+}
+
+/** Vertical layout whose height never goes above [maxHeight]. */
+private class CappedColumn(c: android.content.Context, private val maxHeight: Int) : LinearLayout(c) {
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val cap = MeasureSpec.makeMeasureSpec(
+            minOf(maxHeight, MeasureSpec.getSize(heightMeasureSpec)),
+            MeasureSpec.AT_MOST
+        )
+        super.onMeasure(widthMeasureSpec, cap)
     }
 }

@@ -175,6 +175,60 @@ renamed, moved or deleted. Names have at most 24 characters.
   All. A blue check icon marks the current choice, and focus starts on it. OK sets
   or clears the override and closes the sheet.
 
+### Settings screen
+
+A second activity, `SettingsActivity.kt`, not exported, no launcher filter. It is
+built in code with the same tokens as home. Open it with OK on the gear quick
+control (long press still opens the Android settings) or with the "Launcher
+settings" row at the end of the app options sheet.
+
+- **Layout:** same outer padding as home. A 28dp title row ("Volt settings", 20sp
+  `C_TEXT`), then two cards 12dp below it. Left card: `C_CARD`, 12dp radius,
+  240dp wide, 12dp padding, the section rows, a divider and the "Android
+  settings" row (chevron, opens the system settings). Right card: `C_CARD`,
+  14dp gap, 22dp sides and 20dp top and bottom padding, a 22sp medium title and
+  the rows of the selected section in a scroll view (no scrollbar).
+- **Sections:** Categories, Home cards, About Volt. The list is a plain
+  `sections` list in code, so a "Weather" section can be added first later.
+- **Rows:** the same row look as the sheet (`Rows.kt` builds both): 44dp, 9dp
+  radius, 18dp icon, 16sp label, 15sp value. Focused: `C_BLUE` fill, white text
+  and icon. A selected section that does not have focus shows `C_SEL`.
+- **Focus rules:** focus starts on the first section. Focusing a section shows its
+  detail at once (no OK). Right from a section goes to the first focusable detail
+  row (nothing when there is none). Left from a detail row goes back to the
+  selected section. Up and Down move inside a column and stop at the ends: no
+  wrap and no escape to the other column. Back closes an open edit or action
+  strip, else closes the screen.
+- **Leaving:** the activity finishes in `onStop` when it is not already finishing.
+  Home, the screensaver or an opened Android settings screen never leave it
+  on top of the launcher.
+- **Categories section:** one row per category (name, "N apps" or
+  "Empty · hidden"; "All" shows "Always first" and has no actions) and a last
+  "Add category" row (value "Limit reached" at 12 categories, including All).
+  OK on a category opens a **pill strip** under the row: Rename, Move up, Move
+  down, Delete. Pill: 13sp, 6dp/12dp padding, 14dp radius. Focused pill: white
+  background with `C_BG` text. Others: `C_TRACK` with `C_TEXT`. A move that
+  is not possible is dimmed and skipped. Left/Right move between pills.
+  Up, Down and Back close the strip and focus the row. Move up and Move down
+  save at once and keep focus on the same pill. Delete asks twice: the first OK
+  changes the text to "Confirm delete", the second deletes; moving focus away
+  resets the text. Deleted categories also lose their app overrides.
+- **Rename and Add:** an inline text field row (blue 2dp stroke, hint "Category
+  name", 24 characters, single line, Done key) with the TV keyboard. Done saves
+  (an empty name cancels). Back cancels, even with the keyboard open. After Add
+  the new row gets focus.
+- **Toggle:** a 38x22dp pill track, `C_BLUE` when on and `C_TRACK` when off, with
+  an 18dp white knob. On a focused (blue) row the track is darker blue when on
+  and dark translucent when off, so it stays visible. OK switches it.
+- **Home cards section:** "Weather card" and "System card" switches (default on).
+  Home reads them in `onResume`. Weather off: the card is gone, the weather
+  timers do not run and the status bar temperature is hidden. System card off:
+  the card is gone. Both off: the right column is gone and the hero card takes the
+  full width. One off: the other card takes the full column height. The cards
+  are not focusable, so no focus link changes.
+- **About Volt section:** version, package and RAM budget as plain info rows, and
+  a focusable "Source code" row that does nothing.
+
 ### Bottom sheet
 
 An in-activity overlay, not a dialog window. Implemented in `Sheet.kt`.
@@ -193,6 +247,9 @@ An in-activity overlay, not a dialog window. Implemented in `Sheet.kt`.
   last row stay put. Left/Right do nothing unless the row sets a handler. The
   screen below is blocked from focus. Focus returns to the previous view on close.
 - **Motion:** slide up 150ms with the scrim fading in; close takes 120ms.
+- **Height:** the rows sit in a scroll view (no scrollbar) and the panel is at most
+  500dp high, so a long list (up to 12 categories) stays on the screen. Focus
+  scrolls the focused row into view.
 
 ## 6. Implementation rules (performance)
 

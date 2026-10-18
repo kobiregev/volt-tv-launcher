@@ -115,4 +115,41 @@ class CategoriesTest {
     }
 
     @Test fun nameOfUnknownIsAll() = assertEquals("All", Categories.nameOf(d, "zzz"))
+
+    @Test fun capCountsAll() {
+        var l = d
+        while (Categories.canAdd(l)) l = Categories.add(l, "x")
+        assertEquals(Categories.MAX_CATEGORIES, l.size)
+    }
+
+    @Test fun moveChecks() {
+        assertEquals(false, Categories.canMoveUp(d, "all"))
+        assertEquals(false, Categories.canMoveUp(d, "streaming"))
+        assertEquals(true, Categories.canMoveUp(d, "music"))
+        assertEquals(true, Categories.canMoveDown(d, "streaming"))
+        assertEquals(false, Categories.canMoveDown(d, "system"))
+        assertEquals(false, Categories.canMoveDown(d, "all"))
+        assertEquals(false, Categories.canMoveDown(d, "nope"))
+    }
+
+    @Test fun countAppsUsesResolve() {
+        val apps = listOf<Pair<String?, String>>(
+            null to "streaming",
+            "music" to "streaming",
+            "gone" to "games",
+            null to "deleted"
+        )
+        val c = Categories.countApps(d, apps)
+        assertEquals(2, c["streaming"])
+        assertEquals(1, c["music"])
+        assertEquals(1, c["games"])
+        assertNull(c["tools"])
+    }
+
+    @Test fun valueTexts() {
+        assertEquals("Always first", Categories.valueText("all", 9))
+        assertEquals("Empty · hidden", Categories.valueText("music", 0))
+        assertEquals("1 app", Categories.valueText("music", 1))
+        assertEquals("5 apps", Categories.valueText("music", 5))
+    }
 }

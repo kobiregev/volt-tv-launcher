@@ -91,6 +91,7 @@ class HomeActivity : Activity() {
     private var density = 1f
     private var destroyed = false
     private var resumed = false
+    private var weatherCardOn = true
 
     // data
     private var allEntries: List<AppEntry> = emptyList()
@@ -109,6 +110,9 @@ class HomeActivity : Activity() {
     private lateinit var heroIcon: ImageView
     private lateinit var btnOpen: TextView
     private lateinit var btnOptions: TextView
+    private lateinit var rightCol: View
+    private lateinit var wxCard: View
+    private lateinit var sysCard: View
     private lateinit var wxTemp: TextView
     private lateinit var wxCond: TextView
     private lateinit var wxIcon: ImageView
@@ -180,12 +184,16 @@ class HomeActivity : Activity() {
         main.removeCallbacks(sysTick)
         main.post(sysTick)
         main.removeCallbacks(weatherTick)
-        if (System.currentTimeMillis() - store.weatherTime > Weather.MAX_AGE_MS) refreshWeather()
-        main.postDelayed(weatherTick, Weather.MAX_AGE_MS)
+        applyCards()
+        if (weatherCardOn) {
+            if (System.currentTimeMillis() - store.weatherTime > Weather.MAX_AGE_MS) refreshWeather()
+            main.postDelayed(weatherTick, Weather.MAX_AGE_MS)
+        }
         val saved = store.categories()
         if (saved != cats) {
             cats = saved
             rebuildDock(null, false)
+            heroEntry?.let { showHero(it) }
         }
         if (currentFocus == null) focusFirstTileOrSeg()
     }
@@ -392,11 +400,13 @@ class HomeActivity : Activity() {
         )
 
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        rightCol = col
         top.addView(col, LinearLayout.LayoutParams(0, -1, 1f).apply { leftMargin = dp(14) })
 
         // weather card
         val wx = FrameLayout(this).apply { background = rr(C_CARD, 12) }
         col.addView(wx, LinearLayout.LayoutParams(-1, 0, 1f))
+        wxCard = wx
         val wxCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         wxTemp = tv("--°", 42f, C_TEXT, "sans-serif-light")
         wxCond = tv("", 14f, C_SEC)
@@ -424,6 +434,7 @@ class HomeActivity : Activity() {
             setPadding(dp(20), dp(8), dp(20), dp(8))
         }
         col.addView(sys, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(14) })
+        sysCard = sys
         sysWifi = tv("", 15f, C_TEXT)
         sysMem = tv("", 15f, C_TEXT)
         sys.addView(sysRow("Wi-Fi", sysWifi))
@@ -480,7 +491,7 @@ class HomeActivity : Activity() {
             openSettings(Settings.ACTION_DREAM_SETTINGS, Settings.ACTION_DISPLAY_SETTINGS, Settings.ACTION_SETTINGS)
         }
         quick(R.drawable.ic_refresh) { openSettings(Settings.ACTION_DEVICE_INFO_SETTINGS, Settings.ACTION_SETTINGS) }
-        quick(R.drawable.ic_settings) { openSettings(Settings.ACTION_SETTINGS) }
+        quick(R.drawable.ic_settings, longAction = { openSettings(Settings.ACTION_SETTINGS) }) { openLauncherSettings() }
 
         // explicit focus links
         btnOpen.id = View.generateViewId()
@@ -568,7 +579,7 @@ class HomeActivity : Activity() {
         for (r in quickRefresh) r()
     }
 
-    private fun quick(iconRes: Int, stateFn: (() -> Boolean)? = null, action: () -> Unit) {
+    private fun quick(iconRes: Int, stateFn: (() -> Boolean)? = null, longAction: (() -> Unit)? = null, action: () -> Unit) {
         val bg = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(C_CARD)
@@ -593,6 +604,12 @@ class HomeActivity : Activity() {
             isClickable = true
             defaultFocusHighlightEnabled = false
             setOnClickListener { action() }
+            if (longAction != null) {
+                setOnLongClickListener {
+                    longAction()
+                    true
+                }
+            }
         }
         b.addView(img, FrameLayout.LayoutParams(-1, -1))
         b.addView(
@@ -914,14 +931,7 @@ class HomeActivity : Activity() {
         sheet.show(appHeader(e, "Choose a category"), items, focus)
     }
 
-    private fun catIcon(id: String): Int = when (id) {
-        "streaming" -> R.drawable.ic_cat_streaming
-        "music" -> R.drawable.ic_cat_music
-        "games" -> R.drawable.ic_cat_games
-        "tools" -> R.drawable.ic_cat_tools
-        "system" -> R.drawable.ic_cat_system
-        else -> R.drawable.ic_category
-    }
+    private fun catIcon(id: String): Int = categoryIconRes(id)
 
     private fun showOptions(e: AppEntry) {
         if (sheet.isOpen) return
@@ -969,6 +979,13 @@ class HomeActivity : Activity() {
                         applySort()
                         rebuildDock(e.pkg, false)
                     }
+                ),
+                SheetDivider,
+                SheetRow(
+                    "Launcher settings",
+                    R.drawable.ic_settings,
+                    chevron = true,
+                    onClick = act { openLauncherSettings() }
                 )
             )
         )
@@ -1113,6 +1130,22 @@ class HomeActivity : Activity() {
         }
     }
 
+    private fun openLauncherSettings() {
+        startActivity(Intent(this, SettingsActivity::class.java))
+    }
+
+    /** Shows or hides the weather and system cards (and the right column) from the saved switches. */
+    private fun applyCards() {
+        weatherCardOn = store.showWeatherCard
+        val sysOn = store.showSystemCard
+        wxCard.visibility = if (weatherCardOn) View.VISIBLE else View.GONE
+        sysCard.visibility = if (sysOn) View.VISIBLE else View.GONE
+        (sysCard.layoutParams as LinearLayout.LayoutParams).topMargin = if (weatherCardOn) dp(14) else 0
+        rightCol.visibility = if (weatherCardOn || sysOn) View.VISIBLE else View.GONE
+        topTemp.visibility = if (weatherCardOn) View.VISIBLE else View.GONE
+        sysCard.requestLayout()
+    }
+
     private fun openSettings(vararg actions: String) {
         for (a in actions) {
             try {
@@ -1167,7 +1200,7 @@ class HomeActivity : Activity() {
     // ---------------------------------------------------------------- weather / system
 
     private fun refreshWeather() {
-        if (!Weather.enabled) return
+        if (!Weather.enabled || !weatherCardOn) return
         try {
             exec.execute {
                 val r = Weather.fetch()

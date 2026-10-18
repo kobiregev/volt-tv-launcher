@@ -46,5 +46,12 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:windowSoftInputMode="adjustPan|stateHidden"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|uiMode" />
     </application>
 </manifest>

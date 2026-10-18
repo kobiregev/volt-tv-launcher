@@ -7,6 +7,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+- Volt settings screen: Categories, Home cards and About Volt sections. Open it with OK on the gear button or the "Launcher settings" row in the app options. Long press on the gear still opens the Android settings.
+- Manage categories in settings: rename (TV keyboard), move up or down, delete with a confirm step, and add. The limit is 12 categories.
+- Switches to hide the weather card or the system card. The other card, or the hero card, uses the free space.
 - Editable category data: Streaming, Music, Games, Tools and System by default. Apps sort themselves by the Android app category and by package name. The category control hides empty categories and scrolls when it is wide.
 - A category picker in the app options with an "Auto" row and a check mark on the current choice.
 - Live move mode for the dock: choose "Move" in the app options, then press Left/Right to slide the app. OK saves, Back cancels. A blue ring, chevrons and a hint show the mode.

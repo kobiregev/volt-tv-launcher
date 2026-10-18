@@ -12,6 +12,7 @@ object Categories {
     const val TOOLS = "tools"
     const val SYSTEM = "system"
     const val MAX_NAME = 24
+    const val MAX_CATEGORIES = 12
 
     // v1 stored the override as an int: 0 = none, 1 = Streaming, 2 = System.
     private const val V1_STREAMING = 1
@@ -98,6 +99,36 @@ object Categories {
         if (categories.any { it.id == autoId }) return autoId
         if (categories.any { it.id == STREAMING }) return STREAMING
         return categories.firstOrNull { it.id != ALL }?.id ?: ALL
+    }
+
+    /** True when another category fits (the cap counts "all" too). */
+    fun canAdd(list: List<Category>): Boolean = list.size < MAX_CATEGORIES
+
+    /** True when [moveUp] would change the list. */
+    fun canMoveUp(list: List<Category>, id: String): Boolean = id != ALL && list.indexOfFirst { it.id == id } >= 2
+
+    /** True when [moveDown] would change the list. */
+    fun canMoveDown(list: List<Category>, id: String): Boolean {
+        val i = list.indexOfFirst { it.id == id }
+        return id != ALL && i >= 0 && i < list.size - 1
+    }
+
+    /**
+     * App count per category id. Each app is a pair of (user override or null, auto category id).
+     * Uses the same [resolve] rule as the home screen. "all" is not in the result.
+     */
+    fun countApps(categories: List<Category>, apps: List<Pair<String?, String>>): Map<String, Int> {
+        val out = HashMap<String, Int>()
+        for ((override, auto) in apps) out.merge(resolve(override, auto, categories), 1, Int::plus)
+        return out
+    }
+
+    /** Detail text of a category row in settings. */
+    fun valueText(id: String, count: Int): String = when {
+        id == ALL -> "Always first"
+        count <= 0 -> "Empty · hidden"
+        count == 1 -> "1 app"
+        else -> "$count apps"
     }
 
     /** "all" plus every category that has apps, in list order. */
