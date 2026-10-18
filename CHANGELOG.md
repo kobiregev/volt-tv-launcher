@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-18
+
 ### Added
 
 - Weather section in Volt settings: choose the city on the box (search with the TV keyboard, or pick from a list of about 50 large cities), the unit (°C or °F) and the update interval (15 min, 30 min, 1 hour). Without a city, the weather card shows "Set a city in Volt settings".
@@ -17,6 +19,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Changed
 
+- The version code is never lower than major*10000 + minor*100 + patch (20000 for 2.0.0).
 - The `weather.*` keys in `local.properties` are now only the first default. A city chosen in Volt settings replaces them.
 - Category choices of v1 move to the new format on first start.
 - File managers are now sorted into Tools, not System.

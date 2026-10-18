@@ -287,6 +287,15 @@ An in-activity overlay, not a dialog window. Implemented in `Sheet.kt`.
 - **RAM budget: about 30 MB PSS** on the Mi Box 4 (v1 measures 29-30 MB).
   Measure with `adb shell dumpsys meminfo io.github.kobiregev.volt` after each
   visual change. Any feature that adds more than 5 MB needs a reason.
+- **How to read the number.** Home measures about 24 MB right after a start and
+  29-34 MB about a minute later with no input, because the Java heap grows
+  between garbage collections. Compare steady-state values, not start values.
+- **Known cost: the settings screen.** After a visit to Volt settings, home
+  stays at about 31-35 MB (the heap grew for the settings views, the TV
+  keyboard and the city search, and ART does not give the pages back while home
+  stays in front). It drops when the process restarts. The owner accepted this
+  on 2026-10-18 because settings are opened rarely. Do not add more cost to the
+  settings path; if it grows, move `SettingsActivity` into its own process.
 - Scale every banner or icon down to its display size once and cache it
   (`Visuals.cache`, an LruCache of 16 MB).
 - **Bake corner radii into bitmaps.** View outline clipping does not survive
