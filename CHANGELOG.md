@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Changed
+
+- App options are now a bottom sheet with icons, the current category and the hidden app count, instead of a dialog. Back, Menu and Home close it.
+- Wi-Fi and Bluetooth quick buttons show a blue icon and dot when they are on.
+
 ## [1.0.0]
 
 First release.

@@ -102,6 +102,10 @@ Focus is the most important visual state on a TV. Rules:
 - **Dock tile focus:** scale 1.15, translate up 4dp, alpha 0.55 -> 1, dot and
   name visible. 150ms `ViewPropertyAnimator`.
 - **Quick button focus:** background turns blue, icon turns white.
+- **Quick button state:** a button that can be "on" (Wi-Fi, Bluetooth) shows a
+  blue icon and a 4dp blue dot 4dp above the bottom of the circle when it is on
+  and not focused. Focus wins: blue fill, white icon, no dot. States refresh
+  every 5 s and on resume.
 - **Pill focus:** 2dp white stroke, scale 1.05, 120ms.
 - **Segmented control focus:** the selected segment turns blue. Left/Right
   changes the category at once.
@@ -122,8 +126,27 @@ Focus is the most important visual state on a TV. Rules:
 | Back on home               | Nothing                             |
 | Home while on home         | Reset to All and the first tile     |
 
-App options in v1: move left/right, switch category, hide, app info, show
-hidden apps.
+App options open a bottom sheet (see "Bottom sheet" below). Rows: move left,
+move right, category (shows the current one), hide from dock, app info, and
+show hidden apps (shows the count). Back, Menu or Home closes the sheet.
+
+### Bottom sheet
+
+An in-activity overlay, not a dialog window. Implemented in `Sheet.kt`.
+
+- **Scrim:** full screen, `#A6000000`, not focusable.
+- **Panel:** 560dp wide, centered at the bottom, `C_CARD`, top corners 16dp,
+  padding 16dp (sides, top) and 20dp (bottom). A 36x4dp drag handle (`#3A3D42`)
+  sits at the top.
+- **Header:** 64x36dp app tile, name 18sp medium, sub line 13sp secondary, then a
+  1dp divider (`#2C2F33`) and a 10dp gap.
+- **Row:** 44dp high, 18dp side padding, 9dp radius. 18dp icon, 12dp gap, 16sp
+  label. Optional value (15sp secondary) and 16dp chevron on the right. Focused:
+  `C_BLUE` fill, white label and icon, value `#DCE5FB`.
+- **Focus:** the first row gets focus on open. Up on the first row and Down on the
+  last row stay put. Left/Right do nothing unless the row sets a handler. The
+  screen below is blocked from focus. Focus returns to the previous view on close.
+- **Motion:** slide up 150ms with the scrim fading in; close takes 120ms.
 
 ## 6. Implementation rules (performance)
 

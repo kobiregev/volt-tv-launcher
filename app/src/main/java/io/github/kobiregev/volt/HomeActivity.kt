@@ -3,7 +3,6 @@ package io.github.kobiregev.volt
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.ActivityManager
-import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -38,15 +37,15 @@ import android.widget.Toast
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-private const val C_BG = 0xFF141517.toInt()
-private const val C_CARD = 0xFF1D1F22.toInt()
-private const val C_DOCK = 0xFF1B1D20.toInt()
-private const val C_SEL = 0xFF34373B.toInt()
-private const val C_TEXT = 0xFFE9EAEC.toInt()
-private const val C_SEC = 0xFF8D9197.toInt()
-private const val C_BLUE = 0xFF3E6AE1.toInt()
-private const val C_TRACK = 0xFF2C2F33.toInt()
-private const val C_ICON = 0xFFC9CCD0.toInt()
+internal const val C_BG = 0xFF141517.toInt()
+internal const val C_CARD = 0xFF1D1F22.toInt()
+internal const val C_DOCK = 0xFF1B1D20.toInt()
+internal const val C_SEL = 0xFF34373B.toInt()
+internal const val C_TEXT = 0xFFE9EAEC.toInt()
+internal const val C_SEC = 0xFF8D9197.toInt()
+internal const val C_BLUE = 0xFF3E6AE1.toInt()
+internal const val C_TRACK = 0xFF2C2F33.toInt()
+internal const val C_ICON = 0xFFC9CCD0.toInt()
 
 /** Horizontal scroll view that leaves scrolling to us (smooth, centered on the focused tile). */
 private class SmoothHsv(c: Context) : HorizontalScrollView(c) {
@@ -110,6 +109,9 @@ class HomeActivity : Activity() {
     private lateinit var quickRow: LinearLayout
     private lateinit var hsv: SmoothHsv
     private lateinit var dockRow: LinearLayout
+    private lateinit var frame: FrameLayout
+    private lateinit var sheet: Sheet
+    private val quickRefresh = ArrayList<() -> Unit>()
     private var heroColor = C_CARD
     private var heroAnim: ValueAnimator? = null
 
@@ -123,7 +125,11 @@ class HomeActivity : Activity() {
         density = resources.displayMetrics.density
         store = Store(this)
         visuals = Visuals(this)
-        setContentView(buildUi())
+        val content = buildUi()
+        frame = FrameLayout(this)
+        frame.addView(content, FrameLayout.LayoutParams(-1, -1))
+        sheet = Sheet(this, frame)
+        setContentView(frame)
         showWeather()
         updateSystem()
         seg.requestFocus()
@@ -145,6 +151,7 @@ class HomeActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        refreshQuick()
         main.removeCallbacks(sysTick)
         main.post(sysTick)
         main.removeCallbacks(weatherTick)
@@ -174,15 +181,16 @@ class HomeActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.hasCategory(Intent.CATEGORY_HOME)) {
+            sheet.close()
             setCategory(CAT_ALL, focusFirst = true)
             hsv.scrollTo(0, 0)
         }
     }
 
-    @Deprecated("Back does nothing on the home screen")
+    @Deprecated("Back only closes the sheet on the home screen")
     @Suppress("OVERRIDE_DEPRECATION")
     override fun onBackPressed() {
-        // intentionally empty
+        if (sheet.isOpen) sheet.close()
     }
 
     override fun dispatchKeyEvent(ev: KeyEvent): Boolean {
@@ -198,6 +206,10 @@ class HomeActivity : Activity() {
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         if (keyCode == KeyEvent.KEYCODE_MENU) {
+            if (sheet.isOpen) {
+                sheet.close()
+                return true
+            }
             heroEntry?.let { showOptions(it) }
             return true
         }
@@ -406,8 +418,8 @@ class HomeActivity : Activity() {
         mid.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         quickRow = LinearLayout(this)
         mid.addView(quickRow, LinearLayout.LayoutParams(-2, -1))
-        quick(R.drawable.ic_wifi) { openSettings(Settings.ACTION_WIFI_SETTINGS, Settings.ACTION_SETTINGS) }
-        quick(R.drawable.ic_bluetooth) { openSettings(Settings.ACTION_BLUETOOTH_SETTINGS, Settings.ACTION_SETTINGS) }
+        quick(R.drawable.ic_wifi, { wifiOn() }) { openSettings(Settings.ACTION_WIFI_SETTINGS, Settings.ACTION_SETTINGS) }
+        quick(R.drawable.ic_bluetooth, { btOn() }) { openSettings(Settings.ACTION_BLUETOOTH_SETTINGS, Settings.ACTION_SETTINGS) }
         quick(R.drawable.ic_bolt) { freeMemory() }
         quick(R.drawable.ic_moon) {
             openSettings(Settings.ACTION_DREAM_SETTINGS, Settings.ACTION_DISPLAY_SETTINGS, Settings.ACTION_SETTINGS)
@@ -477,23 +489,74 @@ class HomeActivity : Activity() {
         }
     }
 
-    private fun quick(iconRes: Int, action: () -> Unit) {
+    @Suppress("DEPRECATION")
+    private fun wifiOn(): Boolean = try {
+        (applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager).isWifiEnabled
+    } catch (_: Exception) {
+        false
+    }
+
+    private fun btOn(): Boolean = try {
+        Settings.Global.getInt(contentResolver, "bluetooth_on", 0) == 1
+    } catch (_: Exception) {
+        false
+    }
+
+    private fun refreshQuick() {
+        for (r in quickRefresh) r()
+    }
+
+    private fun quick(iconRes: Int, stateFn: (() -> Boolean)? = null, action: () -> Unit) {
         val bg = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(C_CARD)
         }
-        val b = ImageView(this).apply {
+        val img = ImageView(this).apply {
             setImageResource(iconRes)
             setColorFilter(C_ICON)
             setPadding(dp(10), dp(10), dp(10), dp(10))
             background = bg
+        }
+        val dot = View(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(C_BLUE)
+            }
+            visibility = View.GONE
+        }
+        val b = FrameLayout(this).apply {
+            clipChildren = false
+            clipToPadding = false
             isFocusable = true
             isClickable = true
             defaultFocusHighlightEnabled = false
             setOnClickListener { action() }
-            setOnFocusChangeListener { v, has ->
-                bg.setColor(if (has) C_BLUE else C_CARD)
-                (v as ImageView).setColorFilter(if (has) Color.WHITE else C_ICON)
+        }
+        b.addView(img, FrameLayout.LayoutParams(-1, -1))
+        b.addView(
+            dot,
+            FrameLayout.LayoutParams(dp(4), dp(4), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(4) }
+        )
+        var on = false
+        val apply = {
+            val has = b.isFocused
+            bg.setColor(if (has) C_BLUE else C_CARD)
+            img.setColorFilter(
+                if (has) {
+                    Color.WHITE
+                } else if (on) {
+                    C_BLUE
+                } else {
+                    C_ICON
+                }
+            )
+            dot.visibility = if (on && !has) View.VISIBLE else View.GONE
+        }
+        b.setOnFocusChangeListener { _, _ -> apply() }
+        if (stateFn != null) {
+            quickRefresh.add {
+                on = stateFn()
+                apply()
             }
         }
         quickRow.addView(
@@ -716,45 +779,66 @@ class HomeActivity : Activity() {
     // ---------------------------------------------------------------- options
 
     private fun showOptions(e: AppEntry) {
+        if (sheet.isOpen) return
         val cur = catOf(e)
         val other = if (cur == CAT_SYSTEM) CAT_STREAMING else CAT_SYSTEM
-        val items = arrayOf(
-            "Move left",
-            "Move right",
-            "Category: ${catName(cur)}  (switch to ${catName(other)})",
-            "Hide",
-            "App info",
-            "Show hidden apps (${store.hidden().size})"
-        )
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle(e.label)
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> move(e, -1)
-                    1 -> move(e, 1)
-                    2 -> {
+        val tile = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_XY }
+        loadVisual(e) { v ->
+            if (!v.hasBanner) tile.background = rr(v.tileBg, 6)
+            tile.setImageBitmap(v.tile)
+        }
+        val head = sheet.header(tile, e.label, "${catName(cur)} · position ${shown.indexOf(e) + 1} of ${shown.size}")
+
+        // Close first so focus returns to the dock, then run the action (it may rebuild the dock).
+        fun act(f: () -> Unit): () -> Unit = {
+            sheet.close()
+            f()
+        }
+        sheet.show(
+            head,
+            listOf(
+                SheetRow("Move left", R.drawable.ic_move, onClick = act { move(e, -1) }),
+                SheetRow("Move right", R.drawable.ic_move, onClick = act { move(e, 1) }),
+                SheetRow(
+                    "Category",
+                    R.drawable.ic_category,
+                    value = catName(cur),
+                    chevron = true,
+                    onClick = act {
                         store.setCat(e.pkg, other)
                         val keep = if (category == CAT_ALL || category == other) e.pkg else null
                         heroEntry = null
                         rebuildDock(keep, keep == null)
                     }
-                    3 -> hide(e)
-                    4 -> try {
-                        startActivity(
-                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${e.pkg}"))
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    } catch (_: Exception) {
-                        toast("App info unavailable")
+                ),
+                SheetRow("Hide from dock", R.drawable.ic_hide, onClick = act { hide(e) }),
+                SheetRow(
+                    "App info",
+                    R.drawable.ic_info,
+                    onClick = act {
+                        try {
+                            startActivity(
+                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${e.pkg}"))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        } catch (_: Exception) {
+                            toast("App info unavailable")
+                        }
                     }
-                    5 -> {
+                ),
+                SheetDivider,
+                SheetRow(
+                    "Show hidden apps",
+                    R.drawable.ic_restore,
+                    value = store.hidden().size.toString(),
+                    onClick = act {
                         store.setHidden(emptySet())
                         applySort()
                         rebuildDock(e.pkg, false)
                     }
-                }
-            }
-            .show()
+                )
+            )
+        )
     }
 
     private fun move(e: AppEntry, dir: Int) {
@@ -889,6 +973,7 @@ class HomeActivity : Activity() {
 
     @Suppress("DEPRECATION")
     private fun updateSystem() {
+        refreshQuick()
         // network
         var text = "Offline"
         var online = false
