@@ -127,13 +127,15 @@ Required repository secrets (Settings, Secrets and variables, Actions):
 | `KEY_ALIAS` | Key alias |
 | `KEY_PASSWORD` | Key password |
 
-Create the base64 value with PowerShell:
+The easiest way is the GitHub CLI. Run this from the repository root, so no secret value appears on screen:
 
-```
-[Convert]::ToBase64String([IO.File]::ReadAllBytes('keystore/volt-release.jks'))
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path 'keystore\volt-release.jks'))) | gh secret set KEYSTORE_BASE64
 ```
 
-On Linux/macOS use `base64 -w0 keystore/volt-release.jks`.
+`Resolve-Path` is required: .NET resolves relative paths against the process directory, not the current PowerShell location.
+
+On Linux/macOS use `base64 -w0 keystore/volt-release.jks | gh secret set KEYSTORE_BASE64`.
 
 ## Project structure
 
