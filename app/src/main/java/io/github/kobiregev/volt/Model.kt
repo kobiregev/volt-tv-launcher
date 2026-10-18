@@ -15,17 +15,7 @@ import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.util.LruCache
 
-const val CAT_ALL = 0
-const val CAT_STREAMING = 1
-const val CAT_SYSTEM = 2
-
-fun catName(c: Int) = when (c) {
-    CAT_STREAMING -> "Streaming"
-    CAT_SYSTEM -> "System"
-    else -> "All"
-}
-
-class AppEntry(val pkg: String, val label: String, val component: ComponentName, val defCat: Int, val ri: ResolveInfo)
+class AppEntry(val pkg: String, val label: String, val component: ComponentName, val defCat: String, val ri: ResolveInfo)
 
 /** Pre-scaled bitmaps and colors for one app. */
 class Visual(val tile: Bitmap, val hasBanner: Boolean, val hero: Bitmap, val heroColor: Int, val tileBg: Int) {
@@ -42,9 +32,84 @@ class Store(ctx: Context) {
     fun hidden(): Set<String> = HashSet(sp.getStringSet("hidden", emptySet()) ?: emptySet())
     fun setHidden(s: Set<String>) = sp.edit().putStringSet("hidden", HashSet(s)).apply()
 
-    /** 0 = no override. */
-    fun catOverride(pkg: String): Int = sp.getInt("cat:$pkg", 0)
-    fun setCat(pkg: String, c: Int) = sp.edit().putInt("cat:$pkg", c).apply()
+    fun categories(): List<Category> = Categories.parse(sp.getString("categories", null))
+
+    fun setCategories(l: List<Category>) = sp.edit().putString("categories", Categories.serialize(l)).apply()
+
+    /** The category id the user chose for [pkg], or null for auto. */
+    fun catOverride(pkg: String): String? = sp.getString("cat2:$pkg", null)
+
+    /** Null removes the override. */
+    fun setCat(pkg: String, id: String?) = sp.edit().apply {
+        if (id == null) remove("cat2:$pkg") else putString("cat2:$pkg", id)
+    }.apply()
+
+    /** Removes every user override that points at category [id] (those apps go back to Auto). */
+    fun clearOverridesFor(id: String) {
+        val ed = sp.edit()
+        for ((k, v) in sp.all) if (k.startsWith("cat2:") && v == id) ed.remove(k)
+        ed.apply()
+    }
+
+    /** Home card switches (default on). */
+    var showWeatherCard: Boolean
+        get() = sp.getBoolean("card_weather", true)
+        set(v) {
+            sp.edit().putBoolean("card_weather", v).apply()
+        }
+    var showSystemCard: Boolean
+        get() = sp.getBoolean("card_system", true)
+        set(v) {
+            sp.edit().putBoolean("card_system", v).apply()
+        }
+
+    init {
+        migrate()
+    }
+
+    /** Schema 2: v1 `cat:<pkg>` ints become `cat2:<pkg>` ids. Runs once. */
+    private fun migrate() {
+        if (sp.getInt("schema", 1) >= 2) return
+        val ed = sp.edit()
+        for ((k, v) in sp.all) {
+            if (!k.startsWith("cat:")) continue
+            val id = (v as? Int)?.let { Categories.migrateV1(it) }
+            if (id != null) ed.putString("cat2:" + k.substring(4), id)
+            ed.remove(k)
+        }
+        ed.putInt("schema", 2).apply()
+    }
+
+    /** Saved location, else the build-time default from local.properties, else null (no location). */
+    fun weatherLocation(): WeatherLoc? = if (sp.contains("w_lat")) {
+        WeatherLogic.location(sp.getString("w_city", null), sp.getString("w_lat", null), sp.getString("w_lon", null))
+    } else {
+        WeatherLogic.location(BuildConfig.WEATHER_CITY, BuildConfig.WEATHER_LAT, BuildConfig.WEATHER_LON)
+    }
+
+    fun setWeatherLocation(city: String, lat: String, lon: String) = sp.edit()
+        .putString("w_city", city).putString("w_lat", lat).putString("w_lon", lon).apply()
+
+    /** "c" or "f". */
+    var weatherUnit: String
+        get() = WeatherLogic.normalizeUnit(sp.getString("w_unit", "c"))
+        set(v) {
+            sp.edit().putString("w_unit", WeatherLogic.normalizeUnit(v)).apply()
+        }
+
+    /** Update interval in minutes: 15, 30 or 60. */
+    var weatherInterval: Int
+        get() = WeatherLogic.normalizeInterval(sp.getInt("w_interval", WeatherLogic.DEFAULT_INTERVAL))
+        set(v) {
+            sp.edit().putInt("w_interval", WeatherLogic.normalizeInterval(v)).apply()
+        }
+
+    /** [WeatherLogic.key] of the location and unit the cached reading belongs to. */
+    var weatherKey: String
+        get() = sp.getString("w_key", "") ?: ""
+        set(v) {
+            sp.edit().putString("w_key", v).apply()
+        }
 
     var weatherTemp: Float
         get() = sp.getFloat("w_temp", Float.NaN)
@@ -64,7 +129,7 @@ class Store(ctx: Context) {
 }
 
 object AppLoader {
-    private fun defaultCat(ai: ApplicationInfo, pkg: String): Int {
+    private fun defaultCat(ai: ApplicationInfo, pkg: String): String {
         val sys = ai.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
         return Categorizer.defaultCategory(pkg, sys, ai.category)
     }

@@ -33,8 +33,12 @@ android {
         applicationId = "io.github.kobiregev.volt"
         minSdk = 28
         targetSdk = 34
-        versionCode = (findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
-        versionName = (findProperty("versionName") as String?) ?: "1.0.0"
+        versionName = (findProperty("versionName") as String?) ?: "2.0.0"
+        // Never lower than major*10000 + minor*100 + patch, so a release always installs over older
+        // builds, even when CI passes a small run number as -PversionCode.
+        val semverCode = Regex("""^(\d+)\.(\d+)\.(\d+)""").find(versionName!!)?.destructured
+            ?.let { (ma, mi, pa) -> ma.toInt() * 10000 + mi.toInt() * 100 + pa.toInt() } ?: 1
+        versionCode = maxOf((findProperty("versionCode") as String?)?.toIntOrNull() ?: 1, semverCode)
 
         // Weather location comes from the untracked local.properties, so no home city is committed.
         // Empty values turn the weather fetch off.

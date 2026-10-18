@@ -40,8 +40,9 @@ gradlew.bat ktlintCheck lintDebug testDebugUnitTest assembleRelease
 - **Local release signing:** the build reads `keystore.properties` and
   `keystore/volt-release.jks`. Never commit, print or upload them. The owner
   keeps a backup, and updates need the same key.
-- **Weather location:** set `weather.city`, `weather.lat` and `weather.lon` in
-  `local.properties` (untracked). Empty values turn the weather off.
+- **Weather location:** the owner sets it on the box in Volt settings. The
+  optional `weather.city`, `weather.lat` and `weather.lon` in `local.properties`
+  (untracked) are only the first default.
 
 ## Device loop (real Mi Box)
 

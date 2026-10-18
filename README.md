@@ -11,10 +11,13 @@ A fast, minimal Android TV home launcher with a Tesla-style UI, built for low-RA
 ## Features
 
 - Dock of app tiles with banners, plus a hero area for the focused app
-- Automatic **All / Streaming / System** categories (override per app)
-- Options menu per app (long-press OK, MENU key, or "Options"): move left/right, change category, hide, app info, show hidden apps
+- Categories: All, Streaming, Music, Games, Tools and System by default, sorted automatically. Rename, reorder, delete or add your own in Volt settings. Empty categories are hidden
+- App options in a bottom sheet (long-press OK, MENU key, or "Options"): move, category, hide, app info, show hidden apps, launcher settings
+- Live move mode: Left/Right slides the app through the dock, OK saves, Back cancels
+- Quick controls that show Wi-Fi and Bluetooth state
+- Volt settings screen: weather, categories, home cards, about
 - Status area: clock, Wi-Fi band and signal quality, Ethernet state, free RAM
-- Optional weather from [Open-Meteo](https://open-meteo.com/) (no API key)
+- Weather from [Open-Meteo](https://open-meteo.com/) (no API key). You set the city, the unit (°C/°F) and the update interval on the box, in Volt settings, with search or a list of large cities
 - Entirely D-pad driven, with smooth focus animation
 
 ## Design principles
@@ -68,17 +71,18 @@ Create an untracked `local.properties` in the project root:
 ```
 sdk.dir=/path/to/Android/Sdk
 
-# Optional weather location. Leave empty to turn weather off.
+# Optional first default for the weather city. You can change it on the box in Volt settings.
+# Leave empty to start with no city.
 weather.city=Berlin
 weather.lat=52.52
 weather.lon=13.41
 ```
 
-The location is compiled into the APK as `BuildConfig` fields and is never committed.
+The values are compiled into the APK as `BuildConfig` fields and are never committed. They are only the first default: a city that you choose in Volt settings replaces them.
 
 ### Version
 
-The version defaults to `1.0.0` (code `1`). Override with `-PversionName=1.2.3 -PversionCode=12`.
+The version defaults to `2.0.0`. Override with `-PversionName=1.2.3 -PversionCode=12`. The version code is never lower than `major*10000 + minor*100 + patch` (for example 20000 for 2.0.0), so a release always installs over older builds.
 
 ### Signing
 
@@ -144,7 +148,9 @@ app/src/main/java/io/github/kobiregev/volt/
   HomeActivity.kt   UI, focus handling, options menu, status area
   Model.kt          app loading, persistence (Store), tile bitmaps and colors
   Logic.kt          pure logic: categories, ordering/moving, weather text, Wi-Fi text
-  Weather.kt        Open-Meteo fetch and icon mapping
+  WeatherLogic.kt  pure weather settings logic: URLs, labels, validation
+  PresetCities.kt   list of large world cities for the weather picker
+  Weather.kt        Open-Meteo forecast and city search, icon mapping
 app/src/test/       JVM unit tests for Logic.kt
 docs/               design system and research
 .github/            CI, release workflow, templates
@@ -152,17 +158,14 @@ docs/               design system and research
 
 ## RAM budget
 
-The launcher targets about 30 MB PSS on the Mi Box 4 (`adb shell dumpsys meminfo io.github.kobiregev.volt`). Tile bitmaps are pre-scaled and kept in a 16 MB LRU cache. Changes that raise memory use need a good reason.
+The launcher targets about 30 MB PSS on the Mi Box 4 (`adb shell dumpsys meminfo io.github.kobiregev.volt`). v2 measures about 29-34 MB in steady state (24 MB right after a start), and about 31-35 MB after a visit to Volt settings. Tile bitmaps are pre-scaled and kept in a 16 MB LRU cache. Changes that raise memory use need a good reason.
 
 ## Roadmap
 
-v2 ideas:
+Ideas after v2:
 
-- Live move mode for the dock
-- User-editable categories
-- Bottom-sheet options instead of AlertDialog
-- Weather city setting (instead of build time)
 - Recent apps
+- Upgrade to AGP 9 and Kotlin 2
 
 ## Contributing
 
