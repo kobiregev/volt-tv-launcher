@@ -4,7 +4,16 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      # Minor and patch bumps come as one PR. Major bumps (AGP, Kotlin, Gradle)
+      # come as separate PRs, because they usually need code changes.
+      gradle-minor:
+        update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      # All action bumps come as one PR.
+      actions:
+        patterns: ["*"]
