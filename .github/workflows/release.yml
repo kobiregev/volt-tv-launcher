@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      VOLT_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      VOLT_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      VOLT_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check signing secrets
+        run: |
+          missing=""
+          for v in KEYSTORE_BASE64 VOLT_KEYSTORE_PASSWORD VOLT_KEY_ALIAS VOLT_KEY_PASSWORD; do
+            if [ -z "${!v}" ]; then missing="$missing $v"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets (names inside the workflow):$missing. Required secrets: KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD. See README, section Release process."
+            exit 1
+          fi
+
+      - name: Derive version
+        run: |
+          echo "VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode keystore
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/volt-release.jks"
+          echo "VOLT_KEYSTORE_FILE=$RUNNER_TEMP/volt-release.jks" >> "$GITHUB_ENV"
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Test
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Build signed release APK
+        run: ./gradlew assembleRelease -PversionName="$VERSION_NAME" -PversionCode="$VERSION_CODE" --stacktrace
+
+      - name: Verify signature and rename
+        run: |
+          apk=app/build/outputs/apk/release/app-release.apk
+          apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n 1)"
+          "$apksigner" verify --verbose "$apk"
+          mkdir -p dist
+          cp "$apk" "dist/volt-launcher-${VERSION_NAME}.apk"
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/volt-release.jks"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/volt-launcher-${{ env.VERSION_NAME }}.apk
+          generate_release_notes: true

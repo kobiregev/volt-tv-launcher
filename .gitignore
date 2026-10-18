@@ -1,0 +1,23 @@
+# Build output
+build/
+.gradle/
+.kotlin/
+dist/
+*.apk
+*.aab
+
+# Secrets and local config (never commit)
+local.properties
+keystore.properties
+keystore/
+*.jks
+*.keystore
+
+# IDE
+*.iml
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

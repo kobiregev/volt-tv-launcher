@@ -1,0 +1,5 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#1D1F22" android:pathData="M10,2h28a8,8 0 0,1 8,8v28a8,8 0 0,1 -8,8h-28a8,8 0 0,1 -8,-8v-28a8,8 0 0,1 8,-8z"/>
+    <!-- Volt bolt: the ic_bolt path scaled x1.5 and centered -->
+    <path android:fillColor="#3E6AE1" android:pathData="M22.5,40.5h-1.5l1.5,-10.5H17.25c-0.87,0 -0.86,-0.48 -0.57,-0.99 0.29,-0.51 0.08,-0.12 0.1,-0.18C18.72,25.41 21.63,20.31 25.5,13.5h1.5l-1.5,10.5h5.25c0.74,0 0.84,0.5 0.71,0.77l-0.11,0.22C25.44,35.33 22.5,40.5 22.5,40.5z"/>
+</vector>
