@@ -5,8 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added
+
+- Live move mode for the dock: choose "Move" in the app options, then press Left/Right to slide the app. OK saves, Back cancels. A blue ring, chevrons and a hint show the mode.
+
 ### Changed
 
+- The "Move left" and "Move right" options are now one "Move" option.
 - App options are now a bottom sheet with icons, the current category and the hidden app count, instead of a dialog. Back, Menu and Home close it.
 - Wi-Fi and Bluetooth quick buttons show a blue icon and dot when they are on.
 

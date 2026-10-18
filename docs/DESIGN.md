@@ -126,9 +126,29 @@ Focus is the most important visual state on a TV. Rules:
 | Back on home               | Nothing                             |
 | Home while on home         | Reset to All and the first tile     |
 
-App options open a bottom sheet (see "Bottom sheet" below). Rows: move left,
-move right, category (shows the current one), hide from dock, app info, and
+App options open a bottom sheet (see "Bottom sheet" below). Rows: move (starts
+move mode), category (shows the current one), hide from dock, app info, and
 show hidden apps (shows the count). Back, Menu or Home closes the sheet.
+
+### Move mode
+
+OK on the "Move" row closes the sheet and starts live move mode for that tile.
+
+- **Look:** the tile stays lifted (focus look: scale 1.15, up 4dp, full alpha)
+  with a 3dp `C_BLUE` ring (9dp radius) and two 20dp blue chevrons, 6dp outside
+  its left and right edges. The ring and chevrons are the image foreground
+  drawable, so they scale with the tile and move no layout. A chevron is dimmed
+  at the end of the row. The dot and the name are hidden.
+- **Hint pill:** `C_BLUE`, white 13sp, fully rounded, "Left / Right move · OK done
+  · Back cancel". Centered over the top edge of the dock bar (half above it). It
+  is an overlay in the root frame, so showing it changes no layout.
+- **Hero:** the sub line reads "Moving · position N of M" and updates each step.
+- **Keys:** Left/Right move the tile one place (nothing at either end). The
+  neighbor slides in 150ms. OK saves the order and does not launch the app.
+  Back cancels and restores the old order. Home cancels, then resets as usual.
+  Up, Down and Menu are ignored. A package list reload cancels move mode.
+- **Saving:** the new order of the shown apps is merged into the full order. In a
+  filtered category, apps that the filter hides keep their slots.
 
 ### Bottom sheet
 

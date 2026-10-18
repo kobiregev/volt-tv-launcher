@@ -54,4 +54,44 @@ class DockOrderTest {
 
     @Test fun hiddenSavedPackagesAreAppendedAfterMove() =
         assertEquals(listOf("b", "a", "h"), DockOrder.move(listOf("a", "b"), listOf("a", "b"), "a", 1, listOf("h", "a")))
+
+    @Test fun reorderMoveInAll() {
+        val all = listOf("a", "b", "c", "d")
+        assertEquals(listOf("b", "c", "a", "d"), DockOrder.reorder(all, all, listOf("b", "c", "a", "d")))
+    }
+
+    @Test fun reorderInFilteredSubsetKeepsOtherSlots() = assertEquals(
+        listOf("c", "b", "a", "d", "e"),
+        DockOrder.reorder(listOf("a", "b", "c", "d", "e"), listOf("a", "c", "e"), listOf("c", "a", "e"))
+    )
+
+    @Test fun reorderSubsetMoveToLastKeepsHiddenByFilterApps() = assertEquals(
+        listOf("b", "x", "c", "y", "a"),
+        DockOrder.reorder(listOf("a", "x", "b", "y", "c"), listOf("a", "b", "c"), listOf("b", "c", "a"))
+    )
+
+    @Test fun reorderNoopKeepsOrder() {
+        val all = listOf("a", "b", "c")
+        assertEquals(all, DockOrder.reorder(all, listOf("a", "c"), listOf("a", "c")))
+    }
+
+    @Test fun reorderToFirstPlace() {
+        val all = listOf("a", "b", "c")
+        assertEquals(listOf("c", "a", "b"), DockOrder.reorder(all, all, listOf("c", "a", "b")))
+    }
+
+    @Test fun reorderToLastPlace() {
+        val all = listOf("a", "b", "c")
+        assertEquals(listOf("b", "c", "a"), DockOrder.reorder(all, all, listOf("b", "c", "a")))
+    }
+
+    @Test fun reorderEmptyIsEmpty() = assertEquals(emptyList<String>(), DockOrder.reorder(emptyList(), emptyList(), emptyList()))
+
+    @Test fun reorderAppendsStaleSavedPackagesAndSortsBack() {
+        val saved = listOf("gone", "a", "b")
+        val order = DockOrder.reorder(listOf("a", "b"), listOf("a", "b"), listOf("b", "a"), saved)
+        assertEquals(listOf("b", "a", "gone"), order)
+        val apps = listOf("a" to "A", "b" to "B")
+        assertEquals(listOf("b", "a"), DockOrder.sortVisible(apps, order, emptySet()).map { it.first })
+    }
 }

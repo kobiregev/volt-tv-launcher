@@ -52,6 +52,24 @@ object DockOrder {
         for (p in savedOrder) if (p !in order) order.add(p)
         return order
     }
+
+    /**
+     * Full order after the shown list changed from [shownBefore] to [shownAfter] (a permutation of it).
+     * The slots in [allVisible] that held [shownBefore] items are refilled in order with [shownAfter];
+     * every other package keeps its slot. Packages only present in [savedOrder] are appended, like [move].
+     */
+    fun reorder(
+        allVisible: List<String>,
+        shownBefore: List<String>,
+        shownAfter: List<String>,
+        savedOrder: List<String> = emptyList()
+    ): List<String> {
+        val moved = shownBefore.toSet()
+        val it = shownAfter.iterator()
+        val order = allVisible.map { p -> if (p in moved && it.hasNext()) it.next() else p }.toMutableList()
+        for (p in savedOrder) if (p !in order) order.add(p)
+        return order
+    }
 }
 
 object WeatherCodes {

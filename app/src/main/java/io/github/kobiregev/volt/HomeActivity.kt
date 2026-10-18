@@ -13,7 +13,9 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -27,6 +29,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
@@ -110,10 +113,18 @@ class HomeActivity : Activity() {
     private lateinit var hsv: SmoothHsv
     private lateinit var dockRow: LinearLayout
     private lateinit var frame: FrameLayout
+    private lateinit var dockBar: View
+    private lateinit var moveHint: TextView
     private lateinit var sheet: Sheet
     private val quickRefresh = ArrayList<() -> Unit>()
     private var heroColor = C_CARD
     private var heroAnim: ValueAnimator? = null
+
+    // move mode: the app being moved and the order of [shown] when move mode started (for cancel)
+    private var moving: AppEntry? = null
+    private var moveStartShown: List<AppEntry> = emptyList()
+    private var moveLeftChevron: Drawable? = null
+    private var moveRightChevron: Drawable? = null
 
     private fun dp(v: Int) = (v * density + 0.5f).toInt()
     private fun dpf(v: Float) = v * density
@@ -128,6 +139,7 @@ class HomeActivity : Activity() {
         val content = buildUi()
         frame = FrameLayout(this)
         frame.addView(content, FrameLayout.LayoutParams(-1, -1))
+        frame.addView(moveHint, FrameLayout.LayoutParams(-2, dp(28), Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         sheet = Sheet(this, frame)
         setContentView(frame)
         showWeather()
@@ -181,6 +193,7 @@ class HomeActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.hasCategory(Intent.CATEGORY_HOME)) {
+            endMove()
             sheet.close()
             setCategory(CAT_ALL, focusFirst = true)
             hsv.scrollTo(0, 0)
@@ -190,10 +203,31 @@ class HomeActivity : Activity() {
     @Deprecated("Back only closes the sheet on the home screen")
     @Suppress("OVERRIDE_DEPRECATION")
     override fun onBackPressed() {
-        if (sheet.isOpen) sheet.close()
+        if (moving != null) {
+            cancelMove()
+        } else if (sheet.isOpen) {
+            sheet.close()
+        }
     }
 
     override fun dispatchKeyEvent(ev: KeyEvent): Boolean {
+        if (moving != null) {
+            // Move mode owns the remote: focus search never runs. Back falls through to onBackPressed.
+            when (ev.keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (ev.action == KeyEvent.ACTION_DOWN) {
+                        stepMove(if (ev.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1)
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_MENU -> return true
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                    if (ev.action == KeyEvent.ACTION_UP) finishMove()
+                    return true
+                }
+            }
+            return super.dispatchKeyEvent(ev)
+        }
         if (ev.action == KeyEvent.ACTION_DOWN && ev.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
             val f = currentFocus
             if (f != null && (f === seg || quickRow.indexOfChild(f) >= 0)) {
@@ -437,6 +471,12 @@ class HomeActivity : Activity() {
 
         // 4. dock
         root.addView(View(this), LinearLayout.LayoutParams(-1, 0, 1f))
+        moveHint = tv("Left / Right move · OK done · Back cancel", 13f, Color.WHITE).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(14), 0, dp(14), 0)
+            background = rr(C_BLUE, 14)
+            visibility = View.GONE
+        }
         val dock = LinearLayout(this).apply {
             background = rr(C_DOCK, 12)
             setPadding(dp(16), dp(12), dp(16), dp(12))
@@ -458,6 +498,7 @@ class HomeActivity : Activity() {
         hsv.addView(dockRow, FrameLayout.LayoutParams(-2, -2))
         dock.addView(hsv, LinearLayout.LayoutParams(-1, -2))
         root.addView(dock, LinearLayout.LayoutParams(-1, -2))
+        dockBar = dock
 
         updateSeg()
         return root
@@ -598,6 +639,7 @@ class HomeActivity : Activity() {
             main.post {
                 if (destroyed) return@post
                 allEntries = list
+                endMove()
                 applySort()
                 rebuildDock(null, false)
             }
@@ -693,7 +735,7 @@ class HomeActivity : Activity() {
                 .translationY(if (has) -dpf(4f) else 0f)
                 .alpha(if (has) 1f else 0.55f)
                 .setDuration(150).start()
-            val vis = if (has) View.VISIBLE else View.INVISIBLE
+            val vis = if (has && moving?.pkg != e.pkg) View.VISIBLE else View.INVISIBLE
             dot.visibility = vis
             name.visibility = vis
             if (has) {
@@ -702,9 +744,9 @@ class HomeActivity : Activity() {
                 scrollToTile(v)
             }
         }
-        col.setOnClickListener { launch(e) }
+        col.setOnClickListener { if (moving != null) finishMove() else launch(e) }
         col.setOnLongClickListener {
-            showOptions(e)
+            if (moving == null) showOptions(e)
             true
         }
 
@@ -753,7 +795,7 @@ class HomeActivity : Activity() {
             animateHero(C_CARD)
             return
         }
-        heroCat.text = catName(catOf(e))
+        heroCat.text = if (moving != null) moveText() else catName(catOf(e))
         heroName.text = e.label
         heroIcon.setImageDrawable(null)
         loadVisual(e) { v ->
@@ -797,8 +839,7 @@ class HomeActivity : Activity() {
         sheet.show(
             head,
             listOf(
-                SheetRow("Move left", R.drawable.ic_move, onClick = act { move(e, -1) }),
-                SheetRow("Move right", R.drawable.ic_move, onClick = act { move(e, 1) }),
+                SheetRow("Move", R.drawable.ic_move, value = "Left / Right", onClick = act { startMove(e) }),
                 SheetRow(
                     "Category",
                     R.drawable.ic_category,
@@ -841,10 +882,114 @@ class HomeActivity : Activity() {
         )
     }
 
-    private fun move(e: AppEntry, dir: Int) {
-        val order = DockOrder.move(allApps.map { it.pkg }, shown.map { it.pkg }, e.pkg, dir, store.order()) ?: return
-        store.setOrder(order)
-        applySort()
+    // ---------------------------------------------------------------- move mode
+
+    private fun moveText(): String {
+        val m = moving ?: return ""
+        return "Moving · position ${shown.indexOf(m) + 1} of ${shown.size}"
+    }
+
+    private fun tileOf(e: AppEntry): View? {
+        for (i in 0 until dockRow.childCount) {
+            val v = dockRow.getChildAt(i)
+            if ((v.tag as? AppEntry)?.pkg == e.pkg) return v
+        }
+        return null
+    }
+
+    @Suppress("DEPRECATION")
+    private fun chevron(res: Int): Drawable = resources.getDrawable(res, theme).mutate().also { it.setTint(C_BLUE) }
+
+    private fun startMove(e: AppEntry) {
+        val tile = tileOf(e) as? ViewGroup ?: return
+        moving = e
+        moveStartShown = shown
+        // Ring and chevrons live in the image foreground, so they scale with the focus zoom and shift no layout.
+        // Sizes are divided by the 1.15 focus scale so they look like 20dp and 6dp when lifted.
+        val size = (dpf(20f) / 1.15f).toInt()
+        val gap = (dpf(6f) / 1.15f).toInt()
+        val w = dp(118)
+        val padV = (dp(66) - size) / 2
+        val ring = GradientDrawable().apply {
+            setColor(Color.TRANSPARENT)
+            cornerRadius = dpf(9f)
+            setStroke(dp(3), C_BLUE)
+        }
+        val l = chevron(R.drawable.ic_chevron_left)
+        val r = chevron(R.drawable.ic_chevron_right)
+        moveLeftChevron = l
+        moveRightChevron = r
+        val layers = LayerDrawable(arrayOf(ring, l, r))
+        layers.setLayerInset(1, -(gap + size), padV, w + gap, padV)
+        layers.setLayerInset(2, w + gap, padV, -(gap + size), padV)
+        tile.getChildAt(0).foreground = layers
+        tile.getChildAt(1).visibility = View.INVISIBLE
+        tile.getChildAt(2).visibility = View.INVISIBLE
+        tile.translationZ = dpf(1f) // draw above the neighbors so the chevrons are not covered
+        moveHint.translationY = (dockBar.top - dp(14)).toFloat()
+        moveHint.visibility = View.VISIBLE
+        tile.requestFocus()
+        heroCat.text = moveText()
+        updateChevrons()
+        scrollToTile(tile)
+    }
+
+    private fun updateChevrons() {
+        val m = moving ?: return
+        val i = shown.indexOf(m)
+        moveLeftChevron?.alpha = if (i > 0) 255 else 70
+        moveRightChevron?.alpha = if (i < shown.size - 1) 255 else 70
+    }
+
+    private fun stepMove(dir: Int) {
+        val m = moving ?: return
+        val i = shown.indexOf(m)
+        val j = i + dir
+        if (i < 0 || j !in shown.indices) return
+        val v = dockRow.getChildAt(i)
+        val n = dockRow.getChildAt(j)
+        val list = shown.toMutableList()
+        java.util.Collections.swap(list, i, j)
+        shown = list
+        // Same view instance, new index. Block focus search so removing the focused tile does not move focus away.
+        dockRow.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        dockRow.removeViewAt(i)
+        dockRow.addView(v, j, LinearLayout.LayoutParams(-2, -2))
+        dockRow.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        v.requestFocus()
+        // The neighbor starts at its old place and slides to the new one.
+        n.translationX = (dir * v.width).toFloat()
+        n.animate().translationX(0f).setDuration(150).start()
+        heroCat.text = moveText()
+        updateChevrons()
+        scrollToTile(v)
+    }
+
+    /** Leaves move mode without touching the dock. The caller rebuilds it (all tiles are replaced). */
+    private fun endMove() {
+        if (moving == null) return
+        moving = null
+        moveStartShown = emptyList()
+        moveLeftChevron = null
+        moveRightChevron = null
+        moveHint.visibility = View.GONE
+    }
+
+    private fun finishMove() {
+        val e = moving ?: return
+        val before = moveStartShown.map { it.pkg }
+        val after = shown.map { it.pkg }
+        endMove()
+        if (before != after) {
+            store.setOrder(DockOrder.reorder(allApps.map { it.pkg }, before, after, store.order()))
+            applySort()
+        }
+        rebuildDock(e.pkg, false)
+    }
+
+    private fun cancelMove() {
+        val e = moving ?: return
+        endMove()
         rebuildDock(e.pkg, false)
     }
 
