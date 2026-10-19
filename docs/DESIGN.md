@@ -125,6 +125,12 @@ Focus is the most important visual state on a TV. Rules:
 | Long-press OK, Menu, Options | App options                       |
 | Back on home               | Nothing                             |
 | Home while on home         | Reset to All and the first tile     |
+| Grid button (any app)      | Home (opens Volt)                   |
+
+The grid button of the Xiaomi remote sends key 580. A keyboard layout overlay
+(`res/raw/volt_remote.kcm`, declared by `RemoteKeymapReceiver`) maps it to Home.
+It uses no RAM and runs no service. Someone must select the layout once over
+ADB, because the app cannot select it by itself.
 
 App options open a bottom sheet (see "Bottom sheet" below). Rows: move (starts
 move mode), category (shows the current one), hide from dock, app info, and

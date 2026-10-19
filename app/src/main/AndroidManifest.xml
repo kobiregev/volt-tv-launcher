@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -53,5 +54,20 @@
             android:screenOrientation="landscape"
             android:windowSoftInputMode="adjustPan|stateHidden"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|uiMode" />
+
+        <!-- Exported on purpose: the system queries this receiver by intent action to find the
+             remote key layout. It has no code, and the system query cannot hold a permission. -->
+        <receiver
+            android:name=".RemoteKeymapReceiver"
+            android:label="@string/remote_layout_label"
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
+            <intent-filter>
+                <action android:name="android.hardware.input.action.QUERY_KEYBOARD_LAYOUTS" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.input.metadata.KEYBOARD_LAYOUTS"
+                android:resource="@xml/keyboard_layouts" />
+        </receiver>
     </application>
 </manifest>

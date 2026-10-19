@@ -74,6 +74,10 @@ part of this repo; ask the owner for it.
   `clipChildren = false` and `clipToPadding = false`.
 - **The box turns on the screensaver quickly.** Send `KEYCODE_WAKEUP` before you
   take a screenshot.
+- **Keep the remote key layout.** Do not remove or rename `RemoteKeymapReceiver`,
+  `res/xml/keyboard_layouts.xml`, `res/raw/volt_remote.kcm` or the layout name
+  `volt_remote`. If you do, the selected layout breaks and the grid button stops
+  working. Android 12 stores the selection per remote (vendor and product).
 - **No shell commands that need root.** `pm disable` on components of other apps
   fails with a SecurityException.
 

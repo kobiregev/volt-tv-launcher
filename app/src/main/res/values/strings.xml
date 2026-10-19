@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Volt</string>
+    <string name="remote_layout_label">Volt remote (grid to Home)</string>
 </resources>
