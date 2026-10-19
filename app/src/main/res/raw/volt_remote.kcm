@@ -1,0 +1,6 @@
+# Volt remote: key layout overlay.
+# The Xiaomi remote grid button sends key 580. Android maps it to ALL_APPS,
+# but only the system home app gets that key. This overlay maps it to HOME,
+# so the grid button opens Volt from any app.
+type OVERLAY
+map key 580 HOME

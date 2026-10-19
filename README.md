@@ -82,7 +82,7 @@ The values are compiled into the APK as `BuildConfig` fields and are never commi
 
 ### Version
 
-The version defaults to `2.0.0`. Override with `-PversionName=1.2.3 -PversionCode=12`. The version code is never lower than `major*10000 + minor*100 + patch` (for example 20000 for 2.0.0), so a release always installs over older builds.
+The version defaults to `2.0.1`. Override with `-PversionName=1.2.3 -PversionCode=12`. The version code is never lower than `major*10000 + minor*100 + patch` (for example 20000 for 2.0.0), so a release always installs over older builds.
 
 ### Signing
 
@@ -101,6 +101,18 @@ Release builds are signed when signing info is available, in this order:
 3. Otherwise the release APK is built unsigned.
 
 Never commit `keystore.properties` or the keystore (both are git-ignored). Back them up: updates can only be installed over an existing install if they are signed with the same key.
+
+## Remote grid button
+
+On the Xiaomi remote, the grid button now opens Volt from any app. Volt ships a keyboard layout overlay that maps the grid key (scancode 580) to Home. The overlay uses no RAM and runs no service.
+
+Android does not select the layout by itself. You must select it once over ADB with a shell helper that calls `IInputManager.setCurrentKeyboardLayoutForInputDevice` for the remote, with this layout descriptor:
+
+```
+io.github.kobiregev.volt/io.github.kobiregev.volt.RemoteKeymapReceiver/volt_remote
+```
+
+The helper is not part of this repo. Android 12 stores the selection per remote (vendor and product), so repeat the step for each remote model.
 
 ## Tests and lint
 

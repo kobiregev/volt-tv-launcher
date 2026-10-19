@@ -33,7 +33,7 @@ android {
         applicationId = "io.github.kobiregev.volt"
         minSdk = 28
         targetSdk = 34
-        versionName = (findProperty("versionName") as String?) ?: "2.0.0"
+        versionName = (findProperty("versionName") as String?) ?: "2.0.1"
         // Never lower than major*10000 + minor*100 + patch, so a release always installs over older
         // builds, even when CI passes a small run number as -PversionCode.
         val semverCode = Regex("""^(\d+)\.(\d+)\.(\d+)""").find(versionName!!)?.destructured

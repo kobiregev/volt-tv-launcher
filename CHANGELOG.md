@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-19
+
+### Fixed
+
+- The grid button on the Xiaomi remote now opens Volt from any app. This needs a one-time ADB step that selects the "Volt remote" keyboard layout for the remote. See "Remote grid button" in the README.
+
 ## [2.0.0] - 2026-10-18
 
 ### Added
@@ -41,5 +47,7 @@ First release.
 - Optional weather from Open-Meteo, configured at build time with `weather.city`, `weather.lat` and `weather.lon` in `local.properties`.
 - Unit tests for categories, ordering, weather codes and Wi-Fi text; ktlint, Android lint and GitHub Actions CI and release workflows.
 
-[Unreleased]: https://github.com/kobiregev/volt-tv-launcher/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/kobiregev/volt-tv-launcher/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/kobiregev/volt-tv-launcher/compare/v2.0.0...v2.0.1
+[2.0.0]: https://github.com/kobiregev/volt-tv-launcher/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/kobiregev/volt-tv-launcher/releases/tag/v1.0.0
